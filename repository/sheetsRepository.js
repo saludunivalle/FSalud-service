@@ -5,14 +5,24 @@ require('dotenv').config();
 // Configuración para autenticación de servicio
 let auth = null;
 
+
 const initAuth = async () => {
   try {
-    // Utiliza la autenticación de Google basada en credenciales de aplicación
-    auth = new google.auth.GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    });
+    // Utiliza las credenciales de la variable de entorno si están disponibles
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+      const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+      auth = new google.auth.GoogleAuth({
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        credentials: credentials
+      });
+    } else {
+      // Fallback a la autenticación estándar (para desarrollo local)
+      auth = new google.auth.GoogleAuth({
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      });
+    }
     
     return auth;
   } catch (error) {
