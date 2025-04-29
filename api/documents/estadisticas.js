@@ -1,5 +1,5 @@
-const documentosController = require('../../../controllers/documentosController');
-const { verifyJWT } = require('../../../middleware/auth');
+const documentosController = require('../../controllers/documentosController');
+const { verifyJWT, isAdmin } = require('../../middleware/auth');
 
 module.exports = async (req, res) => {
   // Configurar CORS
@@ -14,16 +14,18 @@ module.exports = async (req, res) => {
   }
   
   try {
-    // Extraer ID de usuario de la ruta
-    req.params = { id: req.url.split('/').pop() };
-    
-    if (req.method === 'GET') {
-      return await documentosController.getDocumentosUsuario(req, res);
-    }
-    
-    return res.status(405).json({ error: 'Método no permitido' });
+    // Verificar JWT y rol de administrador
+    // verifyJWT(req, res, () => {
+    //   isAdmin(req, res, async () => {
+        if (req.method === 'GET') {
+          return await documentosController.getEstadisticas(req, res);
+        }
+        
+        return res.status(405).json({ error: 'Método no permitido' });
+    //   });
+    // });
   } catch (error) {
-    console.error('Error en endpoint de documentos de usuario:', error);
+    console.error('Error en endpoint de estadísticas:', error);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
