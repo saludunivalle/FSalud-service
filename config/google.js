@@ -9,11 +9,6 @@ const oAuth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI || undefined
 );
 
-// Verificar que tenemos las variables de entorno necesarias
-if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
-  console.warn('⚠️ Advertencia: Variables de entorno para Google Service Account no configuradas correctamente');
-}
-
 // Ámbitos de permisos requeridos
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets', 
@@ -23,40 +18,60 @@ const SCOPES = [
 // Cliente JWT para autenticación de servicio
 let jwtClient = null;
 
-// Solo crear el jwtClient si tenemos las credenciales necesarias
-if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
-  try {
-    jwtClient = new google.auth.JWT(
-      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      null,
-      process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-      SCOPES
-    );
-    
-    // Iniciar la autenticación de servicio
-    jwtClient.authorize((err, tokens) => {
-      if (err) {
-        console.error('Error al autorizar JWT:', err);
-        return;
-      }
-      console.log('Conexión exitosa usando JWT!');
-    });
-  } catch (error) {
-    console.error('Error al configurar JWT client:', error);
+// Función para inicializar la autenticación de servicio
+const initServiceAuth = () => {
+  // Intentar inicializar usando GOOGLE_APPLICATION_CREDENTIALS_JSON
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+    try {
+      const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+      jwtClient = new google.auth.JWT(
+        credentials.client_email,
+        null,
+        credentials.private_key,
+        SCOPES
+      );
+      console.log('Servicio configurado usando credenciales JSON');
+      return jwtClient;
+    } catch (error) {
+      console.error('Error al configurar JWT con credenciales JSON:', error);
+    }
   }
+  
+  // Fallback a email y clave privada individuales
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+    try {
+      jwtClient = new google.auth.JWT(
+        process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        null,
+        process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        SCOPES
+      );
+      console.log('Servicio configurado usando EMAIL y PRIVATE_KEY');
+      return jwtClient;
+    } catch (error) {
+      console.error('Error al configurar JWT con EMAIL y PRIVATE_KEY:', error);
+    }
+  }
+  
+  console.error('⚠️ ERROR: No se pudieron configurar las credenciales de servicio');
+  return null;
+};
+
+// Inicializar el cliente JWT
+jwtClient = initServiceAuth();
+
+// Verificar la conexión si existe un cliente
+if (jwtClient) {
+  jwtClient.authorize((err, tokens) => {
+    if (err) {
+      console.error('Error al autorizar JWT:', err);
+      return;
+    }
+    console.log('✅ Conexión exitosa usando JWT!');
+  });
 }
 
 module.exports = {
   oAuth2Client,
-  jwtClient,
-  getAccessToken: async (code) => {
-    try {
-      const { tokens } = await oAuth2Client.getToken(code);
-      oAuth2Client.setCredentials(tokens);
-      return tokens;
-    } catch (error) {
-      console.error('Error al obtener token de acceso:', error);
-      throw error;
-    }
-  }
+  jwtClient
 };

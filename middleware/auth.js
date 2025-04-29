@@ -1,10 +1,52 @@
-// middleware/auth.js
-const { oAuth2Client } = require('../config/google');
+// middleware/auth.js (mejorado)
+const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
+const usersService = require('../services/usersService');
+
+// Cliente OAuth2 para verificación de tokens de Google
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 /**
- * Middleware para verificar tokens de autenticación
+ * Middleware para verificar tokens JWT
  */
-const verifyToken = async (req, res, next) => {
+const verifyJWT = async (req, res, next) => {
+  try {
+    // Extraer token del header o query
+    const authHeader = req.headers.authorization;
+    const queryToken = req.query.token;
+    
+    let token;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (queryToken) {
+      token = queryToken;
+    }
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Token no proporcionado' });
+    }
+    
+    // Verificar token JWT
+    jwt.verify(token, process.env.JWT_SECRET || 'secret_key', (err, decoded) => {
+      if (err) {
+        return res.status(401).json({ error: 'Token inválido o expirado' });
+      }
+      
+      // Añadir información del usuario a la solicitud
+      req.user = decoded;
+      next();
+    });
+  } catch (error) {
+    console.error('Error de autenticación JWT:', error);
+    return res.status(401).json({ error: 'Error de autenticación' });
+  }
+};
+
+/**
+ * Middleware para verificar tokens de Google directamente
+ */
+const verifyGoogleToken = async (req, res, next) => {
   try {
     // Extraer token del header
     const authHeader = req.headers.authorization;
@@ -15,7 +57,7 @@ const verifyToken = async (req, res, next) => {
     const token = authHeader.split(' ')[1];
     
     // Verificar con Google
-    const ticket = await oAuth2Client.verifyIdToken({
+    const ticket = await client.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID
     });
@@ -29,17 +71,27 @@ const verifyToken = async (req, res, next) => {
       });
     }
     
+    // Buscar usuario en base de datos
+    const user = await usersService.findUserByEmail(payload.email);
+    
+    if (!user) {
+      return res.status(404).json({ 
+        error: 'Usuario no registrado en el sistema' 
+      });
+    }
+    
     // Añadir información del usuario a la solicitud
     req.user = {
-      id: payload.sub,
-      email: payload.email,
-      name: payload.name
+      id: user.id_usuario,
+      email: user.correo_usuario,
+      name: user.nombre_usuario + ' ' + user.apellido_usuario,
+      role: user.rol
     };
     
     next();
   } catch (error) {
-    console.error('Error de autenticación:', error);
-    return res.status(401).json({ error: 'Token inválido' });
+    console.error('Error de autenticación con Google:', error);
+    return res.status(401).json({ error: 'Token inválido o error de autenticación' });
   }
 };
 
@@ -52,14 +104,11 @@ const isAdmin = async (req, res, next) => {
       return res.status(401).json({ error: 'Usuario no autenticado' });
     }
     
-    // Aquí se debería consultar si el usuario tiene rol de administrador en la base de datos
-    // Por ahora simplificamos con una lista en .env
-    const adminEmails = process.env.ADMIN_EMAILS?.split(',') || [];
-    
-    if (adminEmails.includes(req.user.email)) {
+    // Verificar si el usuario tiene rol de administrador
+    if (req.user.role === 'admin') {
       next();
     } else {
-      return res.status(403).json({ error: 'Acceso denegado' });
+      return res.status(403).json({ error: 'Acceso denegado. Se requieren permisos de administrador' });
     }
   } catch (error) {
     console.error('Error verificando permisos:', error);
@@ -67,7 +116,24 @@ const isAdmin = async (req, res, next) => {
   }
 };
 
+/**
+ * Middleware para verificar dominio de correo
+ */
+const checkInstitutionalEmail = (req, res, next) => {
+  const email = req.body.email || '';
+  
+  if (!email.endsWith('@correounivalle.edu.co')) {
+    return res.status(403).json({
+      error: 'Debe utilizar un correo institucional (@correounivalle.edu.co)'
+    });
+  }
+  
+  next();
+};
+
 module.exports = {
-  verifyToken,
-  isAdmin
+  verifyJWT,
+  verifyGoogleToken,
+  isAdmin,
+  checkInstitutionalEmail
 };

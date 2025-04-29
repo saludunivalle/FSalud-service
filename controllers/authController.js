@@ -1,8 +1,10 @@
 // controllers/authController.js
 const { OAuth2Client } = require('google-auth-library');
-const sheetsService = require('../services/sheetsService');
+// *** Cambiar sheetsService por usersService y jwt ***
+const usersService = require('../services/usersService'); 
+const jwt = require('jsonwebtoken'); 
 
-// Crear el cliente OAuth2 ANTES de usarlo
+// Crear el cliente OAuth2
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 /**
@@ -12,10 +14,9 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
  */
 const googleAuth = async (req, res) => {
   try {
-    console.log('Procesando solicitud de autenticación Google:', req.body);
+    console.log('Procesando solicitud de autenticación Google');
     
-    // Verificar si tenemos idToken o token
-    const token = req.body.idToken || req.body.token;
+    const token = req.body.idToken || req.body.token || req.body.credential;
     
     if (!token) {
       return res.status(400).json({ 
@@ -24,20 +25,19 @@ const googleAuth = async (req, res) => {
       });
     }
 
-    // Verificar el token con Google
     const ticket = await client.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
 
     const payload = ticket.getPayload();
-    const userId = payload['sub'];
+    const userId = payload['sub']; // ID de Google
     const userEmail = payload['email'];
     const userName = payload['name'];
+    const userPicture = payload['picture']; // Podríamos usarlo si tuviéramos un campo
     
     console.log('Token verificado, información del usuario:', { userId, userEmail });
 
-    // Verificar dominio de correo institucional
     if (!userEmail.endsWith('@correounivalle.edu.co')) {
       return res.status(403).json({
         success: false,
@@ -45,36 +45,55 @@ const googleAuth = async (req, res) => {
       });
     }
 
-    // Usar el servicio de sheets para guardar el usuario
+    // *** Usar usersService para buscar o crear el usuario ***
     try {
-      // Usar sheetsService directamente en lugar de obtener client
-      // Verificar si el usuario existe
-      const userCheckRange = 'USUARIOS!A2:C';
-      const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
-      
-      // Intentar guardar el usuario sin verificar si existe
-      const userRange = 'USUARIOS!A2:C2';
-      const userValues = [[userId, userEmail, userName]];
+      const googleUserData = {
+        googleId: userId, // Pasar el ID de Google
+        email: userEmail,
+        name: userName,
+        // picture: userPicture // Si tuvieras un campo para la foto
+      };
 
-      // Responder con éxito (incluso si no pudimos guardar en sheets)
+      console.log('Llamando a findOrCreateUser con:', googleUserData);
+      const user = await usersService.findOrCreateUser(googleUserData);
+      console.log('Usuario procesado por el servicio:', user);
+
+      if (!user || !user.id_usuario) {
+         console.error('Error: El servicio findOrCreateUser no devolvió un usuario válido.');
+         throw new Error('No se pudo obtener la información del usuario del servicio.');
+      }
+
+      // Generar token JWT para uso interno
+      const jwtToken = jwt.sign(
+        { 
+          id: user.id_usuario, // Usar el ID de nuestra base de datos
+          email: user.correo_usuario,
+          name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
+          role: user.rol || 'estudiante' // Asegurar que el rol esté presente
+        },
+        process.env.JWT_SECRET || 'secret_key', // Usa una variable de entorno segura
+        { expiresIn: '24h' }
+      );
+      
+      // Responder con éxito
       res.status(200).json({
         success: true,
         user: {
-          id: userId,
-          email: userEmail,
-          name: userName
-        }
+          id: user.id_usuario,
+          email: user.correo_usuario,
+          name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
+          role: user.rol || 'estudiante'
+        },
+        token: jwtToken // Enviar el token JWT al cliente
       });
-    } catch (sheetError) {
-      console.error('Error al interactuar con Google Sheets:', sheetError);
-      // Continuamos y devolvemos el usuario de todas formas
-      res.status(200).json({
-        success: true,
-        user: {
-          id: userId,
-          email: userEmail,
-          name: userName
-        }
+
+    } catch (dbError) {
+      console.error('Error al procesar usuario con usersService:', dbError);
+      // Devolver un error 500 si falla la interacción con el servicio/repositorio
+      res.status(500).json({
+        success: false,
+        error: 'Error al procesar la información del usuario',
+        details: dbError.message
       });
     }
   } catch (error) {
@@ -95,4 +114,5 @@ const login = async (req, res) => {
 module.exports = {
   googleAuth,
   login
+  // Podrías añadir verifyToken y logout aquí si los implementas
 };

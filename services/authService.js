@@ -1,5 +1,6 @@
-// services/authService.js
+// services/authService.js (mejorado)
 const { OAuth2Client } = require('google-auth-library');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 // Cliente OAuth2 para verificar tokens
@@ -20,6 +21,11 @@ exports.verifyGoogleToken = async (token) => {
     
     // Obtener la información del payload
     const payload = ticket.getPayload();
+    
+    // Verificar que sea un correo institucional
+    if (!this.isInstitutionalEmail(payload.email)) {
+      throw new Error('Solo se permiten correos institucionales (@correounivalle.edu.co)');
+    }
     
     // Devolver solo los datos necesarios
     return {
@@ -42,4 +48,31 @@ exports.verifyGoogleToken = async (token) => {
  */
 exports.isInstitutionalEmail = (email) => {
   return email && email.endsWith('@correounivalle.edu.co');
+};
+
+/**
+ * Genera un token JWT para uso interno
+ * @param {Object} userData - Datos del usuario para incluir en el token
+ * @returns {string} - Token JWT generado
+ */
+exports.generateJWT = (userData) => {
+  return jwt.sign(
+    userData,
+    process.env.JWT_SECRET || 'secret_key',
+    { expiresIn: '24h' }
+  );
+};
+
+/**
+ * Verifica un token JWT
+ * @param {string} token - Token JWT a verificar
+ * @returns {Object|null} - Datos del usuario o null si es inválido
+ */
+exports.verifyJWT = (token) => {
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET || 'secret_key');
+  } catch (error) {
+    console.error('Error verificando JWT:', error);
+    return null;
+  }
 };
