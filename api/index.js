@@ -20,7 +20,6 @@ const corsOptions = {
   credentials: true, // IMPORTANT: Allow credentials
   optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
-// --- End CORS Configuration ---
 
 
 module.exports = async (req, res) => {
