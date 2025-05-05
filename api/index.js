@@ -62,9 +62,10 @@ async function handleApiRequest(req, res) {
 
     console.log(`Handling ${req.method} request for path: ${path}`); // Add logging
 
-    // Ruta principal de la API
-    if (path === '/api' || path === '/api/') {
+    // Ruta principal de la API y Raíz
+    if (path === '/' || path === '/api' || path === '/api/') { // Añadir path === '/'
       return res.status(200).json({
+        success: true, // Añadir success flag
         message: 'API del Sistema de Gestión Documental funcionando correctamente',
         version: '1.0.0'
       });
@@ -89,6 +90,18 @@ async function handleApiRequest(req, res) {
       req.params = { id: userId };
       const documentsController = require('../controllers/documentsController');
       return await documentsController.getDocumentosUsuario(req, res);
+    }
+
+    // Add this block if you need the specific /getActiveRequests route
+    if (path === '/getActiveRequests') {
+      const userId = url.searchParams.get('userId'); // Probablemente necesites el userId
+      if (!userId) {
+         return res.status(400).json({ success: false, error: 'Se requiere el ID del usuario (userId query parameter)' });
+      }
+      req.params = { id: userId }; // Asignar para que el controlador lo pueda usar si es necesario
+      const documentsController = require('../controllers/documentsController');
+      // Llama a la función que decidiste usar (la nueva o la existente modificada)
+      return await documentsController.getActiveRequests(req, res); 
     }
 
     if (path === '/getDocumentos') {

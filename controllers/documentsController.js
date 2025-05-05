@@ -223,3 +223,35 @@ exports.getEstadisticas = async (req, res) => {
     });
   }
 };
+
+/**
+ * Obtiene las solicitudes activas de documentos
+ * @param {Object} req - Objeto de solicitud Express
+ * @param {Object} res - Objeto de respuesta Express
+ */
+exports.getActiveRequests = async (req, res) => {
+  try {
+    const documentosUsuariosRepo = require('../repository/documentosUsuariosRepository');
+    const solicitudes = await documentosUsuariosRepo.findByEstado('Sin revisar');
+
+    if (!solicitudes || solicitudes.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        message: 'No hay solicitudes activas'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: solicitudes
+    });
+  } catch (error) {
+    console.error('Error al obtener solicitudes activas:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Error al obtener solicitudes activas',
+      details: error.message
+    });
+  }
+};
