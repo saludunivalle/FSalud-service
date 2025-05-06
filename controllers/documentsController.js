@@ -88,8 +88,7 @@ exports.getDocumentosPendientes = async (req, res) => {
  */
 exports.subirDocumento = async (req, res) => {
   try {
-    // Procesar archivo con nuestro middleware
-    await uploadSingleFile('documento')(req, res);
+    await uploadSingleFile('file')(req, res); 
     
     if (!req.file) {
       return res.status(400).json({
@@ -98,20 +97,18 @@ exports.subirDocumento = async (req, res) => {
       });
     }
     
-    // Validar campos requeridos
-    const { userId, tipoDocId } = req.body;
+    const { userId, documentType } = req.body;
     
-    if (!userId || !tipoDocId) {
+    if (!userId || !documentType) {
       return res.status(400).json({
         success: false,
-        error: 'Se requieren los campos userId y tipoDocId'
+        error: 'Se requieren los campos userId y documentType' 
       });
     }
     
-    // Subir documento
     const documento = await documentsService.subirDocumento(
       userId,
-      tipoDocId,
+      documentType,
       req.file.buffer,
       req.file.originalname,
       req.file.mimetype
@@ -123,11 +120,14 @@ exports.subirDocumento = async (req, res) => {
       data: documento
     });
   } catch (error) {
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+       console.error('Multer Error - Unexpected Field:', error.field);
+    }
     console.error('Error al subir documento:', error);
     res.status(500).json({
       success: false,
       error: 'Error al subir documento',
-      details: error.message
+      details: error.message || 'Error interno del servidor' 
     });
   }
 };

@@ -1,5 +1,5 @@
 // api/documents.js
-const documentosController = require('../controllers/documentosController');
+const documentosController = require('../controllers/documentsController');
 const { verifyJWT, isAdmin } = require('../middleware/auth');
 
 module.exports = async (req, res) => {

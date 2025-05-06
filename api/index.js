@@ -21,7 +21,6 @@ const corsOptions = {
   optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
 
-
 module.exports = async (req, res) => {
   // Apply CORS middleware FIRST
   cors(corsOptions)(req, res, async (corsError) => {
@@ -52,20 +51,20 @@ module.exports = async (req, res) => {
 };
 
 /**
- * Función para manejar las solicitudes a la API (Your existing function)
+ * Función para manejar las solicitudes a la API
  */
 async function handleApiRequest(req, res) {
-  try {
-    // Extraer la ruta de la solicitud
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const path = url.pathname;
+  // Extraer la ruta de la solicitud ANTES del try block
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const path = url.pathname; // path is now defined for the whole function scope
 
+  try {
     console.log(`Handling ${req.method} request for path: ${path}`); // Add logging
 
     // Ruta principal de la API y Raíz
-    if (path === '/' || path === '/api' || path === '/api/') { // Añadir path === '/'
+    if (path === '/' || path === '/api' || path === '/api/') {
       return res.status(200).json({
-        success: true, // Añadir success flag
+        success: true,
         message: 'API del Sistema de Gestión Documental funcionando correctamente',
         version: '1.0.0'
       });
@@ -80,6 +79,10 @@ async function handleApiRequest(req, res) {
     // --- Your existing routing logic ---
     if (path === '/getUser') {
       const userId = url.searchParams.get('userId');
+      // Basic validation for userId
+      if (!userId) {
+         return res.status(400).json({ success: false, error: 'Se requiere el ID del usuario (userId query parameter)' });
+      }
       req.params = { id: userId };
       const userController = require('../controllers/usersController');
       return await userController.getUserById(req, res);
@@ -87,21 +90,24 @@ async function handleApiRequest(req, res) {
 
     if (path === '/getUserDocuments') {
       const userId = url.searchParams.get('userId');
+      // Basic validation for userId
+      if (!userId) {
+         return res.status(400).json({ success: false, error: 'Se requiere el ID del usuario (userId query parameter)' });
+      }
       req.params = { id: userId };
       const documentsController = require('../controllers/documentsController');
       return await documentsController.getDocumentosUsuario(req, res);
     }
 
-    // Add this block if you need the specific /getActiveRequests route
     if (path === '/getActiveRequests') {
-      const userId = url.searchParams.get('userId'); // Probablemente necesites el userId
+      const userId = url.searchParams.get('userId');
+      // Basic validation for userId
       if (!userId) {
          return res.status(400).json({ success: false, error: 'Se requiere el ID del usuario (userId query parameter)' });
       }
-      req.params = { id: userId }; // Asignar para que el controlador lo pueda usar si es necesario
+      req.params = { id: userId };
       const documentsController = require('../controllers/documentsController');
-      // Llama a la función que decidiste usar (la nueva o la existente modificada)
-      return await documentsController.getActiveRequests(req, res); 
+      return await documentsController.getActiveRequests(req, res);
     }
 
     if (path === '/getDocumentos') {
@@ -109,6 +115,7 @@ async function handleApiRequest(req, res) {
       return await documentsController.getTiposDocumentos(req, res);
     }
 
+    // --- Sub-router handlers ---
     if (path.startsWith('/api/auth/')) {
       const authHandler = require('./auth');
       return await authHandler(req, res);
@@ -123,19 +130,20 @@ async function handleApiRequest(req, res) {
       const documentsHandler = require('./documents');
       return await documentsHandler(req, res);
     }
-    // --- End existing routing logic ---
+    // --- End sub-router handlers ---
 
     // Ruta no encontrada
-    console.log(`Route not found: ${path}`); // Add logging
+    console.log(`Route not found: ${path}`);
     return res.status(404).json({
-      success: false, // Add success flag
+      success: false,
       error: 'Ruta no encontrada',
       path: path
     });
 
   } catch (error) {
+    // Log the error with the path
     console.error(`Error in handleApiRequest for ${path}:`, error);
-    // Delegate error handling to the main error handler
-    throw error; // Re-throw to be caught by the outer try/catch
+    // Delegate error handling to the outer handler by re-throwing
+    throw error;
   }
 }
