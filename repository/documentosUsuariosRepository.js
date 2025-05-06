@@ -3,6 +3,8 @@ const { generateUUID } = require('../utils/idGenerator');
 
 const HEADERS = [
   'id_usuarioDoc', 'id_persona', 'id_doc', 'fecha_cargue', 
+  'fecha_expedicion', // Added
+  'fecha_vencimiento', // Added
   'revision', 'fecha_revision', 'estado', 'ruta_archivo'
 ];
 
