@@ -66,39 +66,46 @@ exports.findUserById = async (userId) => {
  */
 exports.createUser = async (googleUserData) => {
   try {
-    console.log('createUser - Recibido:', googleUserData);
-    // Separar nombre y apellido si viene completo
+    console.log('[usersService.createUser] Iniciando creación de usuario. Datos de Google recibidos:', JSON.stringify(googleUserData, null, 2));
+
     const nameParts = googleUserData.name ? googleUserData.name.split(' ') : [''];
     const nombre = nameParts[0] || '';
     const apellido = nameParts.slice(1).join(' ') || '';
-    
-    // Construir el objeto COMPLETO del usuario según los HEADERS del repositorio
+
+    if (!googleUserData.googleId) {
+      console.error('[usersService.createUser] ERROR CRÍTICO: googleUserData.googleId está indefinido o es nulo.');
+      throw new Error('No se pudo obtener el ID de Google para crear el usuario.');
+    }
+
     const newUser = {
-      id_usuario: String(googleUserData.googleId), // Asegurar que es string
+      id_usuario: String(googleUserData.googleId),
       correo_usuario: googleUserData.email,
       nombre_usuario: nombre,
       apellido_usuario: apellido,
-      documento_usuario: '', // Campos restantes vacíos por defecto
+      documento_usuario: '',
       tipoDoc: '',
       telefono: '',
       direccion: '',
       observaciones: '',
       fecha_nac: '',
-      email: '', // Podría ser un email alternativo si lo hubiera
-      rol: 'estudiante' // Rol por defecto
+      email: '', // Este es el campo 'email' de tu hoja, no el correo_usuario. Se deja vacío por defecto.
+      rol: 'estudiante'
     };
 
-    console.log('createUser - Objeto a enviar al repositorio:', newUser);
-    
-    // Llamar al createUser del repositorio
+    console.log('[usersService.createUser] Objeto newUser construido para el repositorio:', JSON.stringify(newUser, null, 2));
+
     const createdUser = await usersRepository.createUser(newUser);
     
-    console.log('createUser - Respuesta del repositorio:', createdUser);
-    return createdUser; // Devolver el usuario tal como lo devuelve el repositorio
+    console.log('[usersService.createUser] Respuesta del repositorio usersRepository.createUser:', JSON.stringify(createdUser, null, 2));
+    return createdUser;
 
   } catch (error) {
-    console.error('Error en usersService.createUser:', error);
-    throw error; // Re-lanzar para que findOrCreateUser y el controlador lo manejen
+    console.error('[usersService.createUser] Error detallado:', error.message, error.stack);
+    // Si el error tiene una respuesta de Google API, muéstrala
+    if (error.response && error.response.data && error.response.data.error) {
+        console.error('[usersService.createUser] Google API Error Details:', JSON.stringify(error.response.data.error, null, 2));
+    }
+    throw error; 
   }
 };
 

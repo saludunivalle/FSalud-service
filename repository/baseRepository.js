@@ -136,37 +136,43 @@ class BaseRepository {
    */
   async create(data) {
     try {
-      const sheets = getClient();
+      console.log(`[BaseRepository.create] Intentando crear registro en hoja: ${this.sheetName}. Datos recibidos:`, JSON.stringify(data, null, 2));
+      const sheets = await getClient();
       
-      // Asegurarse de que todos los campos tienen un valor, al menos vacío
-      const completeData = { ...data };
-      this.headers.forEach(header => {
-        if (completeData[header] === undefined) {
-          completeData[header] = '';
-        }
+      // Asegurar que todos los headers tengan un valor, aunque sea vacío
+      const values = [this.headers.map(header => data[header] === undefined ? '' : data[header])];
+      console.log(`[BaseRepository.create] Valores preparados para Google Sheets API (hoja ${this.sheetName}):`, JSON.stringify(values, null, 2));
+
+      const response = await sheets.spreadsheets.values.append({
+        spreadsheetId: spreadsheetId,
+        range: `${this.sheetName}!A1`, // Apendiza después de la última fila con datos
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS', // Asegura que se inserte una nueva fila
+        resource: { values },
       });
-      
-      // Mapear el objeto a fila y verificar que no haya valores undefined o null
-      const row = this.mapObjectToRow(completeData).map(val => 
-        val === undefined || val === null ? '' : String(val)
-      );
-      
-      const values = [row];
-      
-      // Imprimimos valores para depuración
-      console.log('Insertando en ' + this.sheetName + ':', JSON.stringify(values));
-      
-      await sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range: this.range,
-        valueInputOption: 'RAW',
-        resource: { values }
-      });
-      
-      return completeData;
+
+      console.log(`[BaseRepository.create] Respuesta de Google Sheets API (append para ${this.sheetName}):`, JSON.stringify(response.data, null, 2));
+
+      // Validar que response.data.updates.updatedData.values exista y tenga contenido
+      if (response.data && response.data.updates && response.data.updates.updatedData && response.data.updates.updatedData.values && response.data.updates.updatedData.values.length > 0) {
+        const appendedRow = response.data.updates.updatedData.values[0];
+        const result = this.mapRowToObject(appendedRow);
+        console.log(`[BaseRepository.create] Registro mapeado después de la creación en ${this.sheetName}:`, JSON.stringify(result, null, 2));
+        return result;
+      } else {
+        console.warn(`[BaseRepository.create] La respuesta de Google Sheets API para append en ${this.sheetName} no contenía los datos esperados. Respuesta completa:`, JSON.stringify(response.data, null, 2));
+        // Devolver los datos originales o un objeto indicando el problema, en lugar de fallar si mapRowToObject no puede procesar.
+        // Opcionalmente, podrías intentar leer la última fila para confirmar.
+        return data; // O manejar de otra forma
+      }
+
     } catch (error) {
-      console.error(`Error creando registro en ${this.sheetName}:`, error);
-      throw error;
+      console.error(`[BaseRepository.create] Error creando registro en ${this.sheetName}:`, error.message, error.stack);
+      if (error.response && error.response.data && error.response.data.error) {
+        console.error('[BaseRepository.create] Google API Error Details:', JSON.stringify(error.response.data.error, null, 2));
+      }
+      console.error(`[BaseRepository.create] Datos que se intentaban escribir en ${this.sheetName}:`, JSON.stringify(data, null, 2));
+      throw new Error(`No se pudo crear el registro en ${this.sheetName}. Detalles: ${error.message}`);
     }
   }
 
