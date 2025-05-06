@@ -1,7 +1,7 @@
 // controllers/documentsController.js
 const documentsService = require('../services/documentsService');
 const { validateData } = require('../utils/validators');
-const { uploadSingleFile } = require('../middleware/upload');
+const { uploadSingleFile } = require('../middleware/upload'); // Ensure this uses memoryStorage
 
 /**
  * Obtiene todos los tipos de documentos
@@ -88,46 +88,99 @@ exports.getDocumentosPendientes = async (req, res) => {
  */
 exports.subirDocumento = async (req, res) => {
   try {
-    await uploadSingleFile('file')(req, res); 
-    
+    // Usar middleware de Multer para procesar el archivo EN MEMORIA
+    // 'file' es el nombre del campo esperado en FormData
+    await new Promise((resolve, reject) => {
+        uploadSingleFile('file')(req, res, (err) => {
+            if (err) {
+                console.error('Error de Multer:', err);
+                // Handle specific Multer errors if needed
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return reject(new Error('El archivo excede el tamaño máximo permitido.'));
+                }
+                if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+                     return reject(new Error(`Campo de archivo inesperado: ${err.field}`));
+                }
+                 if (err instanceof Error && err.message.includes('Tipo de archivo no permitido')) {
+                     return reject(err); // Propagate file type error
+                 }
+                return reject(new Error('Error al procesar el archivo.'));
+            }
+            resolve();
+        });
+    });
+
+    // --- ADDED Logging ---
+    console.log('Datos del formulario (req.body):', req.body);
+    console.log('Archivo recibido (req.file):', req.file ? `${req.file.originalname} (${req.file.mimetype}, ${req.file.size} bytes)` : 'Ninguno');
+    // --- END Logging ---
+
     if (!req.file) {
+      // Este chequeo podría ser redundante si Multer ya lanzó error, pero es seguro tenerlo
       return res.status(400).json({
         success: false,
-        error: 'No se ha proporcionado ningún archivo'
+        error: 'No se ha proporcionado ningún archivo en el campo "file".'
       });
     }
-    
-    const { userId, documentType } = req.body;
-    
-    if (!userId || !documentType) {
+
+    // Extraer datos del cuerpo (después de que Multer procese)
+    const { userId, documentType, expeditionDate, expirationDate, userName, userEmail } = req.body;
+
+    // --- ADDED Logging ---
+    console.log('Extracted userId:', userId);
+    console.log('Extracted documentType:', documentType);
+    console.log('Extracted expeditionDate:', expeditionDate);
+    console.log('Extracted expirationDate:', expirationDate); // Puede ser undefined
+    // --- END Logging ---
+
+    // Validar campos requeridos
+    if (!userId || !documentType || !expeditionDate) {
+       // Construir mensaje de error más detallado
+       let missingFields = [];
+       if (!userId) missingFields.push('userId');
+       if (!documentType) missingFields.push('documentType');
+       if (!expeditionDate) missingFields.push('expeditionDate');
+
       return res.status(400).json({
         success: false,
-        error: 'Se requieren los campos userId y documentType' 
+        error: `Faltan campos requeridos en la solicitud: ${missingFields.join(', ')}.`
       });
     }
-    
+
+    // Llamar al servicio para subir el documento
+    // Pasamos el buffer del archivo desde req.file.buffer
     const documento = await documentsService.subirDocumento(
       userId,
       documentType,
-      req.file.buffer,
+      req.file.buffer, // El buffer está aquí gracias a memoryStorage
       req.file.originalname,
-      req.file.mimetype
+      req.file.mimetype,
+      { // Pasar metadatos adicionales como un objeto
+          expeditionDate,
+          expirationDate, // Puede ser undefined
+          userName,
+          userEmail
+      }
     );
-    
+
+    // Responder con éxito
     res.status(200).json({
       success: true,
-      message: 'Documento subido correctamente',
-      data: documento
+      message: 'Documento subido y registrado correctamente.',
+      data: documento // Devolver la información del documento creado/actualizado
     });
+
   } catch (error) {
-    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
-       console.error('Multer Error - Unexpected Field:', error.field);
-    }
-    console.error('Error al subir documento:', error);
-    res.status(500).json({
+    // Loggear el error completo en el servidor
+    console.error('Error en controller subirDocumento:', error);
+
+    // Enviar una respuesta de error genérica pero informativa al cliente
+    res.status(error.status || 500).json({ // Usar error.status si está disponible
       success: false,
-      error: 'Error al subir documento',
-      details: error.message || 'Error interno del servidor' 
+      error: 'Error al subir el documento',
+      // Proporcionar detalles del error SÓLO si es seguro (evitar exponer detalles internos)
+      // En desarrollo, puedes enviar error.message, pero en producción considera un mensaje genérico.
+      details: error.message || 'Ocurrió un error inesperado en el servidor.'
     });
   }
 };

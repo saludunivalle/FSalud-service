@@ -1,7 +1,7 @@
 // services/documentsService.js
 const documentosRepository = require('../repository/documentosRepository');
 const documentosUsuariosRepository = require('../repository/documentosUsuariosRepository');
-const driveRepository = require('../repository/driveRepository');
+const driveRepository = require('../repository/driveRepository'); // Usar el repositorio
 const usersRepository = require('../repository/usersRepository');
 const { validateData } = require('../utils/validators');
 const { generateUUID } = require('../utils/idGenerator');
@@ -134,100 +134,114 @@ exports.getDocumentosPendientes = async () => {
 };
 
 /**
- * Sube un documento de usuario
+ * Sube o actualiza un documento de usuario
  * @param {string} userId - ID del usuario
  * @param {string} tipoDocId - ID del tipo de documento
  * @param {Buffer} fileBuffer - Buffer del archivo
- * @param {string} fileName - Nombre del archivo
+ * @param {string} fileName - Nombre original del archivo
  * @param {string} mimeType - Tipo MIME del archivo
- * @returns {Promise<Object>} - Información del documento subido
+ * @param {object} metadata - Metadatos adicionales { expeditionDate, expirationDate?, userName?, userEmail? }
+ * @returns {Promise<Object>} - Información del documento subido/actualizado
  */
-exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeType) => {
+exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeType, metadata) => {
   try {
-    // Validar tipo de archivo
+    console.log(`Iniciando subida para User: ${userId}, DocType: ${tipoDocId}, File: ${fileName}`);
+    // Validar tipo de archivo (ya se hace en middleware, pero doble check no hace daño)
     const tiposPermitidos = [
-      'application/pdf', // PDF
+      'application/pdf', 'image/jpeg', 'image/png', 'image/jpg',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // XLSX
-      'image/jpeg', // JPG
-      'image/png'  // PNG
+      'application/msword', // DOC
+      'application/vnd.ms-excel' // XLS
     ];
-    
     if (!tiposPermitidos.includes(mimeType)) {
-      throw new Error('Tipo de archivo no permitido. Solo se aceptan PDF, DOCX, XLSX, JPG y PNG.');
+      throw new Error(`Tipo de archivo no permitido (${mimeType}). Solo se aceptan: PDF, JPG, PNG, DOC(X), XLS(X).`);
     }
-    
+
     // Verificar si el tipo de documento existe
     const tipoDocumento = await documentosRepository.findOneBy('id_tipoDoc', tipoDocId);
     if (!tipoDocumento) {
       throw new Error(`Tipo de documento con ID ${tipoDocId} no encontrado.`);
     }
-    
-    // Verificar si el usuario ya tiene un documento de este tipo
+    console.log(`Tipo de documento "${tipoDocumento.nombre_tipoDoc}" encontrado.`);
+
+    // Verificar si el usuario existe (opcional pero recomendado)
+    const userExists = await usersRepository.findOneBy('id_usuario', userId);
+    if (!userExists) {
+        console.warn(`Usuario con ID ${userId} no encontrado al subir documento.`);
+        throw new Error(`Usuario con ID ${userId} no existe en el sistema.`);
+    }
+
+    // --- Gestión de Carpetas en Drive ---
+    const carpetaBaseId = await driveRepository.findOrCreateFolder('Documentos_Usuarios');
+    console.log(`Carpeta base ID: ${carpetaBaseId}`);
+
+    const carpetaUsuarioId = await driveRepository.findOrCreateFolder(userId, carpetaBaseId);
+    console.log(`Carpeta de usuario ID: ${carpetaUsuarioId}`);
+    // --- Fin Gestión de Carpetas ---
+
     const documentoExistente = await documentosUsuariosRepository.findDocumentoUsuario(userId, tipoDocId);
-    
-    // Carpeta base para documentos
-    const carpetaBase = await driveRepository.findOrCreateFolder('Documentos_Usuarios');
-    
-    // Carpeta del usuario
-    const carpetaUsuario = await driveRepository.findOrCreateFolder(userId, carpetaBase);
-    
-    let documentoInfo;
-    
-    // Si ya existe un documento de este tipo, actualizarlo
+
+    let documentoInfoDb;
+
+    const fileExtension = fileName.split('.').pop() || 'file';
+    const driveFileName = `${tipoDocumento.nombre_tipoDoc}_${userId}_${Date.now()}.${fileExtension}`;
+
     if (documentoExistente) {
-      // Verificar si el archivo en Drive existe
-      const fileIdAnterior = documentoExistente.ruta_archivo.split('/').pop();
-      let fileAnteriorExiste = false;
-      
-      try {
-        fileAnteriorExiste = await driveRepository.fileExists(fileIdAnterior);
-      } catch (error) {
-        console.warn(`No se pudo verificar archivo anterior ${fileIdAnterior}:`, error.message);
-      }
-      
-      // Si el archivo anterior existe, eliminarlo
-      if (fileAnteriorExiste) {
-        try {
-          await driveRepository.deleteFile(fileIdAnterior);
-        } catch (error) {
-          console.warn(`No se pudo eliminar archivo anterior ${fileIdAnterior}:`, error.message);
+      console.log(`Documento existente encontrado (ID: ${documentoExistente.id_usuarioDoc}). Actualizando...`);
+
+      if (documentoExistente.ruta_archivo) {
+        const urlParts = documentoExistente.ruta_archivo.split('/');
+        const fileIdAnterior = urlParts[urlParts.length - 2];
+
+        if (fileIdAnterior && fileIdAnterior !== 'view') {
+          try {
+            console.log(`Intentando eliminar archivo anterior de Drive: ${fileIdAnterior}`);
+            await driveRepository.deleteFile(fileIdAnterior);
+          } catch (deleteError) {
+            console.warn(`No se pudo eliminar el archivo anterior ${fileIdAnterior} de Drive:`, deleteError.message);
+          }
+        } else {
+          console.log("No se pudo extraer un ID de archivo válido de la ruta anterior:", documentoExistente.ruta_archivo);
         }
       }
-      
-      // Subir el nuevo archivo
-      const fileInfo = await driveRepository.uploadFile(
+
+      const fileInfoDrive = await driveRepository.uploadFile(
         fileBuffer,
-        `${tipoDocumento.nombre_tipoDoc}_${userId}_${Date.now()}.${fileName.split('.').pop()}`,
+        driveFileName,
         mimeType,
-        carpetaUsuario
+        carpetaUsuarioId
       );
-      
-      // Actualizar el registro en la base de datos
-      documentoInfo = await documentosUsuariosRepository.update(
-        'id_usuarioDoc', 
+      console.log("Nuevo archivo subido a Drive:", fileInfoDrive);
+
+      const updateData = {
+        fecha_cargue: new Date().toISOString().split('T')[0],
+        revision: '0',
+        fecha_revision: '',
+        estado: 'Sin revisar',
+        ruta_archivo: fileInfoDrive.webViewLink || `https://drive.google.com/file/d/${fileInfoDrive.id}/view`,
+        fecha_expedicion: metadata.expeditionDate,
+        fecha_vencimiento: (tipoDocumento.vence === 'si' && metadata.expirationDate) ? metadata.expirationDate : '',
+      };
+      documentoInfoDb = await documentosUsuariosRepository.update(
+        'id_usuarioDoc',
         documentoExistente.id_usuarioDoc,
-        {
-          fecha_cargue: new Date().toISOString().split('T')[0],
-          revision: '0', // Resetear revisión
-          fecha_revision: '',
-          estado: 'Sin revisar',
-          ruta_archivo: fileInfo.webViewLink || `https://drive.google.com/file/d/${fileInfo.id}/view`
-        }
+        updateData
       );
+      console.log("Registro de documento actualizado en DB:", documentoInfoDb);
+
     } else {
-      // Si no existe, crear uno nuevo
-      
-      // Subir archivo a Drive
-      const fileInfo = await driveRepository.uploadFile(
+      console.log("Documento no existente para este usuario y tipo. Creando nuevo registro...");
+
+      const fileInfoDrive = await driveRepository.uploadFile(
         fileBuffer,
-        `${tipoDocumento.nombre_tipoDoc}_${userId}_${Date.now()}.${fileName.split('.').pop()}`,
+        driveFileName,
         mimeType,
-        carpetaUsuario
+        carpetaUsuarioId
       );
-      
-      // Crear registro en la base de datos
-      documentoInfo = await documentosUsuariosRepository.createDocumentoUsuario({
+      console.log("Archivo subido a Drive:", fileInfoDrive);
+
+      const createData = {
         id_usuarioDoc: generateUUID(),
         id_persona: userId,
         id_doc: tipoDocId,
@@ -235,18 +249,23 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
         revision: '0',
         fecha_revision: '',
         estado: 'Sin revisar',
-        ruta_archivo: fileInfo.webViewLink || `https://drive.google.com/file/d/${fileInfo.id}/view`
-      });
+        ruta_archivo: fileInfoDrive.webViewLink || `https://drive.google.com/file/d/${fileInfoDrive.id}/view`,
+        fecha_expedicion: metadata.expeditionDate,
+        fecha_vencimiento: (tipoDocumento.vence === 'si' && metadata.expirationDate) ? metadata.expirationDate : '',
+      };
+      documentoInfoDb = await documentosUsuariosRepository.createDocumentoUsuario(createData);
+      console.log("Nuevo registro de documento creado en DB:", documentoInfoDb);
     }
-    
+
     return {
-      ...documentoInfo,
+      ...documentoInfoDb,
       nombre_tipoDoc: tipoDocumento.nombre_tipoDoc,
       vence: tipoDocumento.vence,
       tiempo_vencimiento: tipoDocumento.tiempo_vencimiento
     };
+
   } catch (error) {
-    console.error(`Error al subir documento para usuario ${userId}, tipo ${tipoDocId}:`, error);
+    console.error(`Error en service subirDocumento para User ${userId}, DocType ${tipoDocId}:`, error);
     throw error;
   }
 };
@@ -278,9 +297,6 @@ exports.revisarDocumento = async (documentoId, estado, comentario = '') => {
       estado,
       true // Marcado como revisado
     );
-    
-    // Si hay comentario, se podría guardar en otra tabla o campo
-    // (requeriría modificar la estructura de datos)
     
     return documentoActualizado;
   } catch (error) {
@@ -363,37 +379,25 @@ exports.getEstadisticas = async () => {
       porEstado: {
         'Sin revisar': 0,
         'Rechazado': 0,
-        'Cumplido': 0, // Assuming 'Cumplido' is the backend state for 'Aprobado'
+        'Cumplido': 0,
         'Expirado': 0,
         'No aplica': 0,
-        // 'Sin cargar' is not a state stored in the backend, it's derived in the frontend
       }
     };
 
     // Contar documentos por estado
     documentosUsuarios.forEach(doc => {
-      // Ensure the state exists in our counter object before incrementing
       if (estadisticas.porEstado.hasOwnProperty(doc.estado)) {
         estadisticas.porEstado[doc.estado]++;
       } else {
-        // Optional: Log or handle unexpected states
         console.warn(`Estado inesperado encontrado: ${doc.estado} en documento ${doc.id_usuarioDoc}`);
-        // You could add it to the stats dynamically if needed:
-        // if (!estadisticas.porEstado[doc.estado]) {
-        //   estadisticas.porEstado[doc.estado] = 0;
-        // }
-        // estadisticas.porEstado[doc.estado]++;
       }
     });
-
-    // You could add more statistics here if needed, e.g., count by document type
 
     return estadisticas;
 
   } catch (error) {
     console.error('Error al obtener estadísticas de documentos:', error);
-    throw error; // Re-throw the error to be handled by the controller
+    throw error;
   }
 };
-
-// Potentially add other service functions if required, like deleting a document record, etc.
