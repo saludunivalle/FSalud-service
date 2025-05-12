@@ -96,25 +96,39 @@ const verifyGoogleToken = async (req, res, next) => {
 };
 
 /**
- * Middleware para verificar permisos de administrador
+ * Middleware para verificar roles de usuario
+ * @param {Array|string} roles - Roles permitidos ('admin', 'profesor', 'estudiante' o un array de ellos)
  */
-const isAdmin = async (req, res, next) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
+const checkRole = (roles) => {
+  return async (req, res, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Usuario no autenticado' });
+      }
+      
+      // Convertir a array si es un string
+      const allowedRoles = Array.isArray(roles) ? roles : [roles];
+      
+      if (allowedRoles.includes(req.user.role)) {
+        next();
+      } else {
+        return res.status(403).json({ 
+          error: 'Acceso denegado. No tiene los permisos necesarios',
+          requiredRoles: allowedRoles,
+          userRole: req.user.role 
+        });
+      }
+    } catch (error) {
+      console.error('Error verificando roles:', error);
+      return res.status(500).json({ error: 'Error interno del servidor' });
     }
-    
-    // Verificar si el usuario tiene rol de administrador
-    if (req.user.role === 'admin') {
-      next();
-    } else {
-      return res.status(403).json({ error: 'Acceso denegado. Se requieren permisos de administrador' });
-    }
-  } catch (error) {
-    console.error('Error verificando permisos:', error);
-    return res.status(500).json({ error: 'Error interno del servidor' });
-  }
+  };
 };
+
+// Middleware específicos para cada rol
+const isAdmin = checkRole('admin');
+const isProfesor = checkRole(['admin', 'profesor']); // Profesores y admins pueden acceder
+const isEstudiante = checkRole('estudiante');
 
 /**
  * Middleware para verificar dominio de correo
@@ -134,6 +148,9 @@ const checkInstitutionalEmail = (req, res, next) => {
 module.exports = {
   verifyJWT,
   verifyGoogleToken,
+  checkRole,
   isAdmin,
+  isProfesor,
+  isEstudiante,
   checkInstitutionalEmail
 };

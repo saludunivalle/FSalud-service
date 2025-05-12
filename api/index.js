@@ -115,6 +115,41 @@ async function handleApiRequest(req, res) {
       return await documentsController.getTiposDocumentos(req, res);
     }
 
+    // Rutas específicas para cada tipo de dashboard
+    if (path.startsWith('/api/dashboard/profesor/')) {
+      // Verificar que el usuario sea profesor o admin
+      // Esto asume que un middleware de autenticación (ej. verifyJWT) ya populó req.user
+      const isAuthorized = req.user && (req.user.role === 'profesor' || req.user.role === 'admin');
+      if (!isAuthorized) {
+        return res.status(403).json({
+          success: false,
+          error: 'Acceso denegado. Se requiere rol de profesor o admin'
+        });
+      }
+      
+      // Dirigir a los controladores correspondientes
+      // Asegúrate de que el archivo './dashboard/profesor.js' exista y exporte un manejador.
+      const profesorDashboardHandler = require('./dashboard/profesor');
+      return await profesorDashboardHandler(req, res);
+    }
+    
+    if (path.startsWith('/api/dashboard/estudiante/')) {
+      // Verificar que el usuario sea estudiante
+      // Esto asume que un middleware de autenticación (ej. verifyJWT) ya populó req.user
+      const isAuthorized = req.user && req.user.role === 'estudiante';
+      if (!isAuthorized) {
+        return res.status(403).json({
+          success: false,
+          error: 'Acceso denegado. Se requiere rol de estudiante'
+        });
+      }
+      
+      // Dirigir a los controladores correspondientes
+      // Asegúrate de que el archivo './dashboard/estudiante.js' exista y exporte un manejador.
+      const estudianteDashboardHandler = require('./dashboard/estudiante');
+      return await estudianteDashboardHandler(req, res);
+    }
+
     // --- Sub-router handlers ---
     if (path.startsWith('/api/auth/')) {
       const authHandler = require('./auth');
