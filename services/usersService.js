@@ -21,41 +21,81 @@ exports.findUserByEmail = async (email) => {
 };
 
 /**
- * Busca un usuario por su ID (Implementación actual parece correcta)
+ * Busca un usuario por su ID
  * @param {string} userId - ID del usuario
  * @returns {Promise<Object|null>} - Datos del usuario o null si no existe
  */
 exports.findUserById = async (userId) => {
   try {
-    // Esta implementación busca directamente en las primeras columnas, podría ser suficiente
-    // o podrías cambiarla para usar usersRepository.findOneBy('id_usuario', userId);
     const client = sheetsService.getClient();
     const response = await client.spreadsheets.values.get({
       spreadsheetId: sheetsService.spreadsheetId,
-      // Ajustar el rango si necesitas más columnas al buscar por ID
-      range: 'USUARIOS!A2:L', // Leer todas las columnas definidas
+      range: 'USUARIOS!A2:L', 
     });
 
     const rows = response.data.values || [];
-    const userRow = rows.find(row => row[0] === String(userId)); // Asegurar comparación de strings
+    const userRow = rows.find(row => row[0] === String(userId)); 
     
     if (!userRow) return null;
 
-    // Mapear la fila completa al objeto usuario basado en HEADERS
     const user = {};
-    const HEADERS = [ // Replicar o importar HEADERS de usersRepository
+    const HEADERS = [ 
       'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
       'documento_usuario', 'tipoDoc', 'telefono', 'direccion', 
-      'observaciones', 'fecha_nac', 'email', 'rol'
+      'observaciones', 'fecha_nac', 'email', 'rol', 'primer_login' // Ensure primer_login is here
     ];
     HEADERS.forEach((header, index) => {
-      user[header] = userRow[index] || '';
+      // Default primer_login to 'no' if the cell is empty, otherwise use the cell's value.
+      // For other fields, default to an empty string if the cell is empty.
+      user[header] = userRow[index] || (header === 'primer_login' ? 'no' : '');
     });
     return user;
 
   } catch (error) {
     console.error('Error buscando usuario por ID:', error);
-    throw error; // Re-lanzar para que el controlador lo maneje
+    throw error; 
+  }
+};
+
+/**
+ * Actualiza la información del primer inicio de sesión del usuario
+ * @param {string} userId - ID del usuario
+ * @param {Object} data - Datos para actualizar (programa_academico, documento_usuario, tipoDoc, telefono)
+ * @returns {Promise<Object>} - Usuario actualizado
+ */
+exports.updateUserFirstLogin = async (userId, data) => {
+  try {
+    console.log(`Actualizando primer inicio de sesión para usuario ${userId}`);
+    
+    // Verificar campos requeridos
+    const requiredFields = ['programa_academico', 'documento_usuario', 'tipoDoc', 'telefono'];
+    const missingFields = requiredFields.filter(field => !data[field]);
+    
+    if (missingFields.length > 0) {
+      throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
+    }
+    
+    // Preparar datos para actualización
+    const updateData = {
+      programa_academico: data.programa_academico,
+      documento_usuario: data.documento_usuario,
+      tipoDoc: data.tipoDoc,
+      telefono: data.telefono,
+      primer_login: 'si' // Marcar que ya completó el primer login
+    };
+    
+    // Actualizar usuario
+    const updatedUser = await usersRepository.update('id_usuario', userId, updateData);
+    
+    if (!updatedUser) {
+      throw new Error(`Usuario con ID ${userId} no encontrado`);
+    }
+    
+    console.log(`Primer inicio de sesión actualizado exitosamente para usuario ${userId}`);
+    return updatedUser;
+  } catch (error) {
+    console.error(`Error actualizando primer inicio de sesión: ${error.message}`);
+    throw error;
   }
 };
 
@@ -88,8 +128,9 @@ exports.createUser = async (googleUserData) => {
       direccion: '',
       observaciones: '',
       fecha_nac: '',
-      email: '', // Este es el campo 'email' de tu hoja, no el correo_usuario. Se deja vacío por defecto.
-      rol: 'estudiante'
+      email: '', 
+      rol: 'estudiante',
+      primer_login: 'no' // Correctly set for new users
     };
 
     console.log('[usersService.createUser] Objeto newUser construido para el repositorio:', JSON.stringify(newUser, null, 2));
@@ -117,30 +158,30 @@ exports.createUser = async (googleUserData) => {
 exports.findOrCreateUser = async (googleUserData) => {
   try {
     console.log('findOrCreateUser - Buscando email:', googleUserData.email);
-    // Buscar si el usuario ya existe por correo electrónico
-    const existingUser = await this.findUserByEmail(googleUserData.email);
+    const existingUserByEmail = await this.findUserByEmail(googleUserData.email); // This returns partial data {id_usuario, correo_usuario, nombre_usuario}
     
-    // Si existe, devolver el usuario existente (asegurándose de que tenga id_usuario)
-    if (existingUser && existingUser.id_usuario) {
-      console.log('findOrCreateUser - Usuario encontrado:', existingUser);
-      // Podríamos querer actualizar algún dato si cambió en Google? Por ahora no.
-      // Asegurarse de devolver el objeto completo si findUserByEmail no lo hace
-       if (!existingUser.rol) { // Ejemplo: si falta el rol
-           const fullExistingUser = await this.findUserById(existingUser.id_usuario);
-           return fullExistingUser || existingUser; // Devolver el completo si se encontró, si no, el original
-       }
-      return existingUser;
+    if (existingUserByEmail && existingUserByEmail.id_usuario) {
+      console.log('findOrCreateUser - Usuario encontrado por email, obteniendo detalles completos para ID:', existingUserByEmail.id_usuario);
+      // Fetch the full user details to ensure all fields, including primer_login, are present
+      const fullExistingUser = await this.findUserById(existingUserByEmail.id_usuario);
+      if (fullExistingUser) {
+        console.log('findOrCreateUser - Detalles completos del usuario existente:', fullExistingUser);
+        return fullExistingUser;
+      } else {
+        // This case implies an inconsistency if an ID was found by email but not by ID.
+        // Log a warning and proceed to create, though this might indicate a deeper issue.
+        console.warn(`findOrCreateUser - Usuario con ID ${existingUserByEmail.id_usuario} no encontrado por findUserById. Se intentará crear el usuario.`);
+        // Fall through to create the user.
+      }
     }
     
-    console.log('findOrCreateUser - Usuario no encontrado, creando...');
-    // Si no existe, crear nuevo usuario
-    const newUser = await this.createUser(googleUserData);
+    console.log('findOrCreateUser - Usuario no encontrado por email o detalles completos no recuperados, creando nuevo usuario...');
+    const newUser = await this.createUser(googleUserData); // createUser sets primer_login: 'no'
     console.log('findOrCreateUser - Nuevo usuario creado:', newUser);
     return newUser;
 
   } catch (error) {
     console.error('Error en findOrCreateUser:', error);
-    // Podrías devolver un objeto de error específico o lanzar el error
     throw new Error(`Error procesando usuario ${googleUserData.email}: ${error.message}`);
   }
 };

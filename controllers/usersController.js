@@ -41,6 +41,53 @@ const saveUser = async (req, res) => {
 };
 
 /**
+ * Actualiza información de primer inicio de sesión
+ * @param {Object} req - Objeto de solicitud Express
+ * @param {Object} res - Objeto de respuesta Express
+ */
+const updateFirstLogin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { programa_academico, documento_usuario, tipoDoc, telefono } = req.body;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Se requiere el ID del usuario'
+      });
+    }
+
+    // Validar datos
+    if (!programa_academico || !documento_usuario || !tipoDoc || !telefono) {
+      return res.status(400).json({
+        success: false,
+        error: 'Todos los campos son requeridos'
+      });
+    }
+
+    const updatedUser = await usersService.updateUserFirstLogin(id, {
+      programa_academico,
+      documento_usuario,
+      tipoDoc,
+      telefono
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Información de primer inicio de sesión actualizada correctamente',
+      data: updatedUser
+    });
+  } catch (error) {
+    console.error('Error al actualizar primer inicio de sesión:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al actualizar información de primer inicio de sesión',
+      details: error.message
+    });
+  }
+};
+
+/**
  * Obtiene un usuario por su ID
  * @param {Object} req - Objeto de solicitud Express
  * @param {Object} res - Objeto de respuesta Express
@@ -82,8 +129,8 @@ const getUserById = async (req, res) => {
   }
 };
 
-
 module.exports = {
   saveUser,
-  getUserById // Añadir a las exportaciones
+  getUserById,
+  updateFirstLogin
 };
