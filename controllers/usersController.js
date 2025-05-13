@@ -48,7 +48,16 @@ const saveUser = async (req, res) => {
 const updateFirstLogin = async (req, res) => {
   try {
     const { id } = req.params;
-    const { programa_academico, documento_usuario, tipoDoc, telefono } = req.body;
+    // Extraer los campos adicionales del req.body
+    const { 
+      programa_academico, 
+      documento_usuario, 
+      tipoDoc, 
+      telefono,
+      direccion, 
+      fecha_nac, 
+      email 
+    } = req.body;
 
     if (!id) {
       return res.status(400).json({
@@ -57,11 +66,12 @@ const updateFirstLogin = async (req, res) => {
       });
     }
 
-    // Validar datos
-    if (!programa_academico || !documento_usuario || !tipoDoc || !telefono) {
+    // Validar datos (puedes añadir validación para los nuevos campos si es necesario)
+    if (!programa_academico || !documento_usuario || !tipoDoc || !telefono || !direccion || !fecha_nac || !email) {
       return res.status(400).json({
         success: false,
-        error: 'Todos los campos son requeridos'
+        // Actualizar mensaje de error para incluir los nuevos campos si son obligatorios
+        error: 'Todos los campos (programa, documento, tipoDoc, telefono, direccion, fecha_nac, email personal) son requeridos'
       });
     }
 
@@ -69,7 +79,10 @@ const updateFirstLogin = async (req, res) => {
       programa_academico,
       documento_usuario,
       tipoDoc,
-      telefono
+      telefono,
+      direccion,
+      fecha_nac,
+      email    
     });
 
     res.status(200).json({

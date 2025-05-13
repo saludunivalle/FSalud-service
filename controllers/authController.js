@@ -78,10 +78,10 @@ const googleAuth = async (req, res) => {
         id: user.id_usuario,
         email: user.correo_usuario,
         name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
-        role: user.rol || 'estudiante',
-        // If user.rol is 'profesor', isFirstLogin is false.
-        // Otherwise, for students: if primer_login is 'no', then isFirstLogin is true (modal should show).
-        isFirstLogin: user.rol === 'profesor' ? false : (user.primer_login === 'no') 
+        role: user.rol, // El rol ya viene determinado por usersService (ej: 'profesor' o 'estudiante')
+        isFirstLogin: user.rol === 'profesor' // O cualquier otro rol que no sea estudiante
+          ? false // Para roles no estudiantiles, isFirstLogin siempre es false
+          : String(user.primer_login || '').trim().toLowerCase() !== 'si'
       },
       token: jwtToken
     });

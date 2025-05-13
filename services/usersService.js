@@ -30,7 +30,7 @@ exports.findUserById = async (userId) => {
     const client = sheetsService.getClient();
     const response = await client.spreadsheets.values.get({
       spreadsheetId: sheetsService.spreadsheetId,
-      range: 'USUARIOS!A2:L', 
+      range: 'USUARIOS!A2:O', 
     });
 
     const rows = response.data.values || [];
@@ -41,16 +41,19 @@ exports.findUserById = async (userId) => {
     const user = {};
     const HEADERS = [ 
       'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
-      'documento_usuario', 'tipoDoc', 'telefono', 'direccion', 
-      'observaciones', 'fecha_nac', 'email', 'rol', 'primer_login' // Ensure primer_login is here
+      'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
+      'direccion', 'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
     ];
     HEADERS.forEach((header, index) => {
-      // Default primer_login to 'no' if the cell is empty, otherwise use the cell's value.
-      // For other fields, default to an empty string if the cell is empty.
       user[header] = userRow[index] || (header === 'primer_login' ? 'no' : '');
     });
-    return user;
 
+    // Si el correo del usuario está en la columna admin, asignar rol profesor
+    if (user.admin && user.admin.trim() === user.correo_usuario) {
+      user.rol = 'profesor';
+    }
+
+    return user;
   } catch (error) {
     console.error('Error buscando usuario por ID:', error);
     throw error; 
@@ -60,15 +63,18 @@ exports.findUserById = async (userId) => {
 /**
  * Actualiza la información del primer inicio de sesión del usuario
  * @param {string} userId - ID del usuario
- * @param {Object} data - Datos para actualizar (programa_academico, documento_usuario, tipoDoc, telefono)
+ * @param {Object} data - Datos para actualizar (programa_academico, documento_usuario, tipoDoc, telefono, direccion, fecha_nac, email)
  * @returns {Promise<Object>} - Usuario actualizado
  */
 exports.updateUserFirstLogin = async (userId, data) => {
   try {
-    console.log(`Actualizando primer inicio de sesión para usuario ${userId}`);
+    console.log(`Actualizando primer inicio de sesión para usuario ${userId} con datos:`, data);
     
-    // Verificar campos requeridos
-    const requiredFields = ['programa_academico', 'documento_usuario', 'tipoDoc', 'telefono'];
+    // Actualizar campos requeridos si los nuevos son obligatorios
+    const requiredFields = [
+      'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
+      'direccion', 'fecha_nac', 'email' 
+    ];
     const missingFields = requiredFields.filter(field => !data[field]);
     
     if (missingFields.length > 0) {
@@ -81,7 +87,10 @@ exports.updateUserFirstLogin = async (userId, data) => {
       documento_usuario: data.documento_usuario,
       tipoDoc: data.tipoDoc,
       telefono: data.telefono,
-      primer_login: 'si' // Marcar que ya completó el primer login
+      direccion: data.direccion,         // Nuevo
+      fecha_nac: data.fecha_nac,         // Nuevo
+      email: data.email,                 // Nuevo (email personal)
+      primer_login: 'si'                 // Marcar que ya completó el primer login
     };
     
     // Actualizar usuario
