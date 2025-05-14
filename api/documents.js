@@ -1,6 +1,6 @@
 // api/documents.js
 const documentosController = require('../controllers/documentsController');
-const { verifyJWT, isAdmin } = require('../middleware/auth');
+const { verifyJWT, isProfesor, isAdmin } = require('../middleware/auth');
 
 module.exports = async (req, res) => {
   try {
@@ -37,6 +37,20 @@ module.exports = async (req, res) => {
       if (endpoint === 'usuario' && param) {
         req.params = { id: param };
         return await documentosController.getDocumentosUsuario(req, res);
+      }
+
+      // Obtener datos solo para administradores (GET /api/documentos/some-admin-only-data/{param})
+      if (endpoint === 'some-admin-only-data' && param) {
+        await verifyJWT(req, res, async () => {
+          await isProfesor(req, res, async () => {
+            // If both pass, req.user is populated and role is correct
+            // return await someController.getAdminOnlyData(req, res);
+          });
+        });
+        if (!res.headersSent) {
+          // Handle cases where middleware didn't send response but should have stopped
+        }
+        return; // Ensure function exits if response sent by middleware
       }
     }
     
