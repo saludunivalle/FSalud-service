@@ -1,6 +1,6 @@
 // api/users.js
 const someController = require('../controllers/usersController'); // Correctly imported as someController
-const { verifyJWT, isAdmin } = require('../middleware/auth');
+const { verifyJWT, isAdmin, verifyFirebaseToken, isEstudiante } = require('../middleware/auth');
 
 module.exports = async (req, res) => {
   try {
@@ -12,6 +12,16 @@ module.exports = async (req, res) => {
     const parts = fullEndpoint.split('/');
     const routePart1 = parts[0]; // For /:userId/first-login, this is userId. For /save, this is "save". For /id/:userId, this is "id".
     const routePart2 = parts.length > 1 ? parts[1] : null; // For /:userId/first-login, this is "first-login". For /id/:userId, this is userId.
+
+    // Ruta pública para verificar token (POST /api/users/verify-token)
+    if (routePart1 === 'verify-token' && req.method === 'POST') {
+      return await someController.verifyFirebaseToken(req, res);
+    }
+
+    // Aplicar middleware de autenticación para todas las demás rutas
+    await new Promise((resolve) => {
+      verifyFirebaseToken(req, res, () => resolve());
+    });
 
     // Actualizar primer inicio de sesión (POST /api/users/:userId/first-login)
     // routePart1 will be the userId, routePart2 will be "first-login"

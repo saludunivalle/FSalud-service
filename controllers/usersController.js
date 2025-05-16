@@ -1,6 +1,45 @@
 // controllers/userController.js
 const sheetsService = require('../services/sheetsService');
-const usersService = require('../services/usersService'); // Import usersService
+const usersService = require('../services/usersService');
+
+// Create a mock firebaseAdmin if the real module isn't available
+let firebaseAdmin;
+try {
+  firebaseAdmin = require('firebase-admin');
+} catch (error) {
+  console.warn('firebase-admin module not found, fallback authentication will be used');
+  // Mock implementation with minimal functionality
+  firebaseAdmin = {
+    auth: () => ({
+      verifyIdToken: async (token) => {
+        console.log('MOCK: Skipping Firebase token verification due to missing firebase-admin');
+        // Extract basic info from token without verification (NOT SECURE - TEMPORARY FIX ONLY)
+        try {
+          // Extract minimal data from the token without verification
+          const tokenParts = token.split('.');
+          if (tokenParts.length !== 3) throw new Error('Invalid token format');
+          
+          const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+          return {
+            uid: payload.user_id || payload.sub,
+            email: payload.email
+          };
+        } catch (err) {
+          console.error('Error parsing token without verification:', err);
+          throw new Error('Invalid token format');
+        }
+      }
+    })
+  };
+}
+
+if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && !process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+  console.error('ERROR DE CONFIGURACIÓN: No se encontraron credenciales de Firebase Admin.' +
+    'Debes configurar FIREBASE_SERVICE_ACCOUNT_JSON o FIREBASE_SERVICE_ACCOUNT_PATH en tu archivo .env');
+  
+  // Opcional: podrías lanzar un error para detener la aplicación en caso de configuración faltante
+  // throw new Error('Credenciales de Firebase Admin no configuradas');
+}
 
 /**
  * Guarda un usuario en Google Sheets si no existe previamente
@@ -10,14 +49,38 @@ const usersService = require('../services/usersService'); // Import usersService
 const saveUser = async (req, res) => {
   try {
     console.log('Datos recibidos en saveUser:', req.body);
-    const { id, email, name } = req.body;
+    
+    // Extract data respecting both naming conventions
+    const id = req.body.id || req.body.firebaseUid;
+    const email = req.body.email;
+    const name = req.body.name || req.body.displayName;
 
     // Validación de datos
     if (!id || !email || !name) {
       return res.status(400).json({
         success: false,
-        error: 'Se requieren los campos id, email y name'
+        error: 'Se requieren los campos id/firebaseUid, email y name/displayName'
       });
+    }
+
+    // Verificar token si viene incluido en la solicitud
+    if (req.body.token) {
+      try {
+        const decodedToken = await firebaseAdmin.auth().verifyIdToken(req.body.token);
+        // Si el ID no coincide con el token, podría ser una solicitud maliciosa
+        if (decodedToken.uid !== id) {
+          return res.status(401).json({
+            success: false,
+            error: 'ID de usuario no coincide con el token proporcionado'
+          });
+        }
+      } catch (tokenError) {
+        return res.status(401).json({
+          success: false,
+          error: 'Token inválido',
+          details: tokenError.message
+        });
+      }
     }
 
     // Verificar si el usuario ya existe
