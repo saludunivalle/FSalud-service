@@ -1,5 +1,6 @@
 // api/auth.js
 const authController = require('../controllers/authController');
+const usersController = require('../controllers/usersController');
 
 module.exports = async (req, res) => {
   try {
@@ -18,6 +19,21 @@ module.exports = async (req, res) => {
       // Autenticación con Google
       if (endpoint === 'google') {
         return await authController.googleAuth(req, res);
+      }
+      
+      // Verificar token de Firebase
+      if (endpoint === 'verify-token') {
+        return await usersController.verifyFirebaseToken(req, res);
+      }
+      
+      // Registro con Firebase
+      if (endpoint === 'register-firebase') {
+        return await usersController.saveUser(req, res);
+      }
+      
+      // Login con Firebase (Google)
+      if (endpoint === 'google-firebase') {
+        return await usersController.saveUser(req, res);
       }
     }
     

@@ -1,4 +1,15 @@
 // config/google.js
+// Fix for OpenSSL issues in Node.js 17+
+const nodeCrypto = require('crypto');
+if (nodeCrypto.setFips) {
+  // Only call if the function exists
+  try {
+    nodeCrypto.setFips(false);
+  } catch (e) {
+    console.warn('Failed to set FIPS mode:', e.message);
+  }
+}
+
 const { google } = require('googleapis');
 require('dotenv').config();
 
@@ -6,7 +17,7 @@ require('dotenv').config();
 const oAuth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  process.env.REDIRECT_URI || undefined
+  process.env.GOOGLE_REDIRECT_URI
 );
 
 // Ámbitos de permisos requeridos
@@ -15,60 +26,36 @@ const SCOPES = [
   'https://www.googleapis.com/auth/drive'
 ];
 
-// Cliente JWT para autenticación de servicio
+// Cliente JWT para autenticación de servicio con las credenciales ORIGINALES
 let jwtClient = null;
 
-// Función para inicializar la autenticación de servicio
+// Usar credenciales originales para Google Sheets y Drive
 const initServiceAuth = () => {
-  // Intentar inicializar usando GOOGLE_APPLICATION_CREDENTIALS_JSON
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
-    try {
-      const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-      jwtClient = new google.auth.JWT(
-        credentials.client_email,
-        null,
-        credentials.private_key,
-        SCOPES
-      );
-      console.log('Servicio configurado usando credenciales JSON');
-      return jwtClient;
-    } catch (error) {
-      console.error('Error al configurar JWT con credenciales JSON:', error);
-    }
+  try {
+    jwtClient = new google.auth.JWT(
+      process.env.GOOGLE_CLIENT_EMAIL,
+      null,
+      process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      SCOPES
+    );
+    console.log('Servicio Google configurado para Sheets/Drive');
+    return jwtClient;
+  } catch (error) {
+    console.error('Error al configurar JWT:', error);
+    return null;
   }
-  
-  // Fallback a email y clave privada individuales
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
-    try {
-      jwtClient = new google.auth.JWT(
-        process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        null,
-        process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        SCOPES
-      );
-      console.log('Servicio configurado usando EMAIL y PRIVATE_KEY');
-      return jwtClient;
-    } catch (error) {
-      console.error('Error al configurar JWT con EMAIL y PRIVATE_KEY:', error);
-    }
-  }
-  
-  console.error('⚠️ ERROR: No se pudieron configurar las credenciales de servicio');
-  return null;
 };
 
 // Inicializar el cliente JWT
-jwtClient = initServiceAuth();
-
-// Verificar la conexión si existe un cliente
-if (jwtClient) {
-  jwtClient.authorize((err, tokens) => {
-    if (err) {
-      console.error('Error al autorizar JWT:', err);
-      return;
-    }
-    console.log('✅ Conexión exitosa usando JWT!');
-  });
+try {
+  jwtClient = initServiceAuth();
+  if (!jwtClient) {
+    console.error('Failed to initialize JWT client. Check your Google credentials.');
+  } else {
+    console.log('JWT client initialized successfully');
+  }
+} catch (error) {
+  console.error('Error initializing JWT client:', error);
 }
 
 module.exports = {
