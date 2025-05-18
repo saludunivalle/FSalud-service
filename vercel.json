@@ -3,7 +3,8 @@
   "builds": [
     {
       "src": "api/index.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": { "runtime": "nodejs16" }
     }
   ],
   "rewrites": [
@@ -21,6 +22,7 @@
     }
   ],
   "env": {
-    "CORS_ALLOWED_ORIGINS": "http://localhost:3000,https://fsalud-saludunivalles-projects.vercel.app"
+    "CORS_ALLOWED_ORIGINS": "http://localhost:3000,https://fsalud-saludunivalles-projects.vercel.app",
+    "NODE_OPTIONS": "--openssl-legacy-provider"
   }
 }

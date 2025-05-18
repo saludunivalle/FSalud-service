@@ -165,7 +165,7 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
     }
     console.log(`Tipo de documento "${tipoDocumento.nombre_tipoDoc}" encontrado.`);
 
-    // Verificar si el usuario existe (opcional pero recomendado)
+
     const userExists = await usersRepository.findOneBy('id_usuario', userId);
     if (!userExists) {
         console.warn(`Usuario con ID ${userId} no encontrado al subir documento.`);

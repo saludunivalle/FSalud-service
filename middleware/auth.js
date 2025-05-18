@@ -154,6 +154,26 @@ const verifyGoogleToken = async (req, res, next) => {
 };
 
 /**
+ * Middleware para verificar tokens de Firebase
+ */
+const verifyFirebaseToken = async (req, res, next) => {
+  try {
+    // Código existente...
+  } catch (error) {
+    console.error('Error de autenticación con Firebase:', error);
+    
+    // Respuestas más específicas según el tipo de error
+    if (error.code === 'auth/id-token-expired') {
+      return res.status(401).json({ error: 'Token expirado. Por favor, inicie sesión nuevamente.' });
+    } else if (error.code === 'auth/id-token-revoked') {
+      return res.status(401).json({ error: 'Token revocado. Por favor, inicie sesión nuevamente.' });
+    } else {
+      return res.status(401).json({ error: 'Token inválido o error de autenticación' });
+    }
+  }
+};
+
+/**
  * Middleware para verificar roles de usuario
  * @param {Array|string} roles - Roles permitidos ('admin', 'profesor', 'estudiante' o un array de ellos)
  */
@@ -206,7 +226,7 @@ const checkInstitutionalEmail = (req, res, next) => {
 module.exports = {
   verifyJWT,
   verifyGoogleToken,
-  verifyFirebaseToken, // Agregando la nueva función
+  verifyFirebaseToken, 
   checkRole,
   isAdmin,
   isProfesor,
