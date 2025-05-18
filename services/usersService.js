@@ -160,37 +160,41 @@ exports.createUser = async (googleUserData) => {
 };
 
 /**
- * Busca un usuario por correo, si no existe lo crea
- * @param {Object} googleUserData - Datos del usuario de Google { googleId, email, name }
+ * Busca un usuario por correo o lo crea si no existe
+ * @param {Object} googleUserData - Datos del usuario de Google
  * @returns {Promise<Object>} - Usuario encontrado o creado
  */
 exports.findOrCreateUser = async (googleUserData) => {
   try {
     console.log('findOrCreateUser - Buscando email:', googleUserData.email);
-    const existingUserByEmail = await this.findUserByEmail(googleUserData.email); // This returns partial data {id_usuario, correo_usuario, nombre_usuario}
     
-    if (existingUserByEmail && existingUserByEmail.id_usuario) {
-      console.log('findOrCreateUser - Usuario encontrado por email, obteniendo detalles completos para ID:', existingUserByEmail.id_usuario);
-      // Fetch the full user details to ensure all fields, including primer_login, are present
-      const fullExistingUser = await this.findUserById(existingUserByEmail.id_usuario);
-      if (fullExistingUser) {
-        console.log('findOrCreateUser - Detalles completos del usuario existente:', fullExistingUser);
-        return fullExistingUser;
-      } else {
-        // This case implies an inconsistency if an ID was found by email but not by ID.
-        // Log a warning and proceed to create, though this might indicate a deeper issue.
-        console.warn(`findOrCreateUser - Usuario con ID ${existingUserByEmail.id_usuario} no encontrado por findUserById. Se intentará crear el usuario.`);
-        // Fall through to create the user.
+    // 1. Buscamos primero por email (que es único y consistente)
+    const existingUserByEmail = await this.findUserByEmail(googleUserData.email);
+    
+    if (existingUserByEmail) {
+      console.log('findOrCreateUser - Usuario encontrado por email:', existingUserByEmail);
+      
+      // 2. Obtenemos los detalles completos incluyendo primer_login
+      const fullUserDetails = await this.findUserById(existingUserByEmail.id_usuario);
+      
+      if (fullUserDetails) {
+        // 3. Verificamos si el ID de Firebase ha cambiado y lo actualizamos si es necesario
+        if (fullUserDetails.firebase_uid !== googleUserData.googleId) {
+          console.log(`Actualizando ID de Firebase para usuario ${fullUserDetails.id_usuario}`);
+          // Aquí deberíamos tener un método para actualizar el ID, pero como no existe aún,
+          // simplemente lo ignoramos por ahora
+        }
+        
+        return fullUserDetails;
       }
     }
     
-    console.log('findOrCreateUser - Usuario no encontrado por email o detalles completos no recuperados, creando nuevo usuario...');
-    const newUser = await this.createUser(googleUserData); // createUser sets primer_login: 'no'
-    console.log('findOrCreateUser - Nuevo usuario creado:', newUser);
+    // 4. Si no existe, creamos un nuevo usuario
+    console.log('findOrCreateUser - Usuario no encontrado, creando nuevo...');
+    const newUser = await this.createUser(googleUserData);
     return newUser;
-
   } catch (error) {
     console.error('Error en findOrCreateUser:', error);
-    throw new Error(`Error procesando usuario ${googleUserData.email}: ${error.message}`);
+    throw error;
   }
 };

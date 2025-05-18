@@ -2,6 +2,7 @@
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const usersService = require('../services/usersService');
+const firebaseAdmin = require('../config/firebase-admin'); // Importar Firebase Admin
 
 // Cliente OAuth2 para verificación de tokens de Google
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -40,6 +41,63 @@ const verifyJWT = async (req, res, next) => {
   } catch (error) {
     console.error('Error de autenticación JWT:', error);
     return res.status(401).json({ error: 'Error de autenticación' });
+  }
+};
+
+/**
+ * Middleware para verificar tokens de Firebase
+ */
+const verifyFirebaseToken = async (req, res, next) => {
+  try {
+    // Extraer token del header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Token no proporcionado' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    
+    // Verificar con Firebase Admin
+    const decodedToken = await firebaseAdmin.auth().verifyIdToken(token);
+    const uid = decodedToken.uid;
+    const email = decodedToken.email;
+    
+    // Verificar si es correo institucional
+    if (!email.endsWith('@correounivalle.edu.co')) {
+      return res.status(403).json({ 
+        error: 'Acceso denegado. Por favor, utiliza un correo institucional (@correounivalle.edu.co)' 
+      });
+    }
+    
+    // Buscar usuario por email (más confiable que por ID)
+    const user = await usersService.findUserByEmail(email);
+    
+    if (!user) {
+      return res.status(404).json({ 
+        error: 'Usuario no registrado en el sistema' 
+      });
+    }
+    
+    // Añadir información del usuario a la solicitud
+    req.user = {
+      id: user.id_usuario,
+      email: user.correo_usuario,
+      name: user.nombre_usuario + ' ' + (user.apellido_usuario || ''),
+      role: user.rol
+    };
+    
+    next();
+  } catch (error) {
+    console.error('Error de autenticación con Firebase:', error);
+    
+    // Respuestas más específicas según el tipo de error
+    if (error.code === 'auth/id-token-expired') {
+      return res.status(401).json({ error: 'Token expirado. Por favor, inicie sesión nuevamente.' });
+    } else if (error.code === 'auth/id-token-revoked') {
+      return res.status(401).json({ error: 'Token revocado. Por favor, inicie sesión nuevamente.' });
+    } else {
+      return res.status(401).json({ error: 'Token inválido o error de autenticación' });
+    }
   }
 };
 
@@ -148,6 +206,7 @@ const checkInstitutionalEmail = (req, res, next) => {
 module.exports = {
   verifyJWT,
   verifyGoogleToken,
+  verifyFirebaseToken, // Agregando la nueva función
   checkRole,
   isAdmin,
   isProfesor,

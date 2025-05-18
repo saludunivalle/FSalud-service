@@ -5,7 +5,7 @@ const { generateUserId } = require('../utils/idGenerator'); // generateUserId ya
 const HEADERS = [
   'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
   'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 'direccion', 
-  'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
+  'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login', 'firebase_uid'
 ];
 
 class UsersRepository extends BaseRepository {

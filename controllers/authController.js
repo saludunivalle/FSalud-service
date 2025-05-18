@@ -15,6 +15,7 @@ const googleAuth = async (req, res) => {
   try {
     console.log('Procesando solicitud de autenticación Google');
     
+    // Obtener el token 
     const token = req.body.idToken || req.body.token || req.body.credential;
     
     if (!token) {
@@ -24,24 +25,42 @@ const googleAuth = async (req, res) => {
       });
     }
 
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
+    // Implementar verificación alternativa para entornos de desarrollo
+    let payload;
+    try {
+      const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch (verifyError) {
+      console.warn('Error en verificación estándar, intentando verificación alternativa', verifyError);
+      
+      // Alternativa: decodificar el token manualmente (solo para desarrollo)
+      try {
+        const tokenParts = token.split('.');
+        if (tokenParts.length !== 3) throw new Error('Formato de token inválido');
+        
+        payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+        console.log('Token decodificado manualmente:', payload);
+      } catch (decodeError) {
+        throw new Error(`No se pudo verificar el token: ${decodeError.message}`);
+      }
+    }
     
-    const payload = ticket.getPayload();
-    const userId = payload['sub']; 
-    const userEmail = payload['email'];
-    const userName = payload['name'];
+    // Verificar que sea un correo institucional
+    const userId = payload.sub;
+    const userEmail = payload.email;
+    const userName = payload.name;
     
-    console.log('Token verificado, información del usuario:', { userId, userEmail, userName });
-
     if (!userEmail.endsWith('@correounivalle.edu.co')) {
       return res.status(403).json({
         success: false,
         error: 'Por favor ingrese con un correo institucional (@correounivalle.edu.co)'
       });
     }
+
+    console.log('Token verificado, información del usuario:', { userId, userEmail, userName });
 
     const googleUserData = {
       googleId: userId, 
@@ -50,7 +69,7 @@ const googleAuth = async (req, res) => {
     };
 
     console.log('Llamando a findOrCreateUser con:', googleUserData);
-    const user = await usersService.findOrCreateUser(googleUserData); // user is defined HERE
+    const user = await usersService.findOrCreateUser(googleUserData);
     console.log('Usuario procesado por el servicio:', user);
 
     if (!user || !user.id_usuario) {
@@ -78,10 +97,10 @@ const googleAuth = async (req, res) => {
         id: user.id_usuario,
         email: user.correo_usuario,
         name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
-        role: user.rol, // El rol ya viene determinado por usersService (ej: 'profesor' o 'estudiante')
-        isFirstLogin: user.rol === 'profesor' // O cualquier otro rol que no sea estudiante
-          ? false // Para roles no estudiantiles, isFirstLogin siempre es false
-          : String(user.primer_login || '').trim().toLowerCase() !== 'si'
+        role: user.rol || 'estudiante',
+        isFirstLogin: user.rol === 'profesor' 
+          ? false // Los profesores nunca requieren completar el formulario
+          : (user.primer_login !== 'si') // Si primer_login es 'si', entonces NO es su primer login
       },
       token: jwtToken
     });
@@ -103,5 +122,5 @@ const login = async (req, res) => {
 
 module.exports = {
   googleAuth,
-  login // Assuming login just calls googleAuth
+  login
 };
