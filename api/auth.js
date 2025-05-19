@@ -10,14 +10,29 @@ module.exports = async (req, res) => {
     
     // Rutas POST
     if (req.method === 'POST') {
-      // Login regular
+      // Login regular con correo y contraseña
       if (endpoint === 'login') {
         return await authController.login(req, res);
+      }
+      
+      // Registro con correo y contraseña
+      if (endpoint === 'register') {
+        return await authController.register(req, res);
       }
       
       // Autenticación con Google
       if (endpoint === 'google') {
         return await authController.googleAuth(req, res);
+      }
+      
+      // Enviar código de verificación
+      if (endpoint === 'send-code') {
+        return await authController.sendVerificationCode(req, res);
+      }
+      
+      // Verificar código
+      if (endpoint === 'verify-code') {
+        return await authController.verifyCode(req, res);
       }
     }
     

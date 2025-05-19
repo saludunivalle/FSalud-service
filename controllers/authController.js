@@ -1,6 +1,7 @@
 // controllers/authController.js
 const { OAuth2Client } = require('google-auth-library');
 const usersService = require('../services/usersService'); 
+const authService = require('../services/authService');
 const jwt = require('jsonwebtoken'); 
 
 // Crear el cliente OAuth2
@@ -36,12 +37,13 @@ const googleAuth = async (req, res) => {
     
     console.log('Token verificado, información del usuario:', { userId, userEmail, userName });
 
-    if (!userEmail.endsWith('@correounivalle.edu.co')) {
-      return res.status(403).json({
-        success: false,
-        error: 'Por favor ingrese con un correo institucional (@correounivalle.edu.co)'
-      });
-    }
+    // Ya no requerimos correo institucional
+    // if (!userEmail.endsWith('@correounivalle.edu.co')) {
+    //   return res.status(403).json({
+    //     success: false,
+    //     error: 'Por favor ingrese con un correo institucional (@correounivalle.edu.co)'
+    //   });
+    // }
 
     const googleUserData = {
       googleId: userId, 
@@ -50,7 +52,7 @@ const googleAuth = async (req, res) => {
     };
 
     console.log('Llamando a findOrCreateUser con:', googleUserData);
-    const user = await usersService.findOrCreateUser(googleUserData); // user is defined HERE
+    const user = await usersService.findOrCreateUser(googleUserData);
     console.log('Usuario procesado por el servicio:', user);
 
     if (!user || !user.id_usuario) {
@@ -78,9 +80,9 @@ const googleAuth = async (req, res) => {
         id: user.id_usuario,
         email: user.correo_usuario,
         name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
-        role: user.rol, // El rol ya viene determinado por usersService (ej: 'profesor' o 'estudiante')
-        isFirstLogin: user.rol === 'profesor' // O cualquier otro rol que no sea estudiante
-          ? false // Para roles no estudiantiles, isFirstLogin siempre es false
+        role: user.rol,
+        isFirstLogin: user.rol === 'profesor' 
+          ? false
           : String(user.primer_login || '').trim().toLowerCase() !== 'si'
       },
       token: jwtToken
@@ -96,12 +98,289 @@ const googleAuth = async (req, res) => {
   }
 };
 
-// Agregando la función login que se usa en el endpoint api/auth/login.js
+/**
+ * Registra un nuevo usuario con correo y contraseña
+ * @param {Object} req - Objeto de solicitud Express
+ * @param {Object} res - Objeto de respuesta Express
+ */
+const register = async (req, res) => {
+  try {
+    const { email, password, captchaToken } = req.body;
+    
+    // Validar datos
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Se requieren correo y contraseña'
+      });
+    }
+    
+    // Verificar CAPTCHA
+    if (captchaToken) {
+      const isValidCaptcha = await authService.verifyCaptcha(captchaToken);
+      if (!isValidCaptcha) {
+        return res.status(400).json({
+          success: false,
+          error: 'Verificación CAPTCHA fallida'
+        });
+      }
+    }
+    
+    // Verificar si el usuario ya existe
+    const existingUser = await usersService.findUserByEmail(email);
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: 'El correo electrónico ya está registrado'
+      });
+    }
+    
+    // Hashear contraseña
+    const hashedPassword = authService.hashPassword(password);
+    
+    // Crear usuario
+    const userData = {
+      correo_usuario: email,
+      password: hashedPassword,
+      nombre_usuario: email.split('@')[0], // Nombre temporal basado en correo
+      rol: 'estudiante', // Rol por defecto
+      primer_login: 'si' // Requerirá completar el perfil
+    };
+    
+    const newUser = await usersService.createUser(userData);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Usuario registrado exitosamente'
+    });
+    
+  } catch (error) {
+    console.error('Error al registrar usuario:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al registrar el usuario',
+      details: error.message
+    });
+  }
+};
+
+/**
+ * Inicia sesión con correo y contraseña
+ * @param {Object} req - Objeto de solicitud Express
+ * @param {Object} res - Objeto de respuesta Express
+ */
 const login = async (req, res) => {
-  return googleAuth(req, res);
+  try {
+    const { email, password, captchaToken } = req.body;
+    
+    // Validar datos
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Se requieren correo y contraseña'
+      });
+    }
+    
+    // Verificar CAPTCHA
+    if (captchaToken) {
+      const isValidCaptcha = await authService.verifyCaptcha(captchaToken);
+      if (!isValidCaptcha) {
+        return res.status(400).json({
+          success: false,
+          error: 'Verificación CAPTCHA fallida'
+        });
+      }
+    }
+    
+    // Buscar usuario
+    const user = await usersService.findUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Correo o contraseña incorrectos'
+      });
+    }
+    
+    // Verificar si tiene contraseña (usuario creado por correo)
+    if (!user.password) {
+      return res.status(401).json({
+        success: false,
+        error: 'Esta cuenta fue creada con Google. Por favor, inicie sesión con Google.'
+      });
+    }
+    
+    // Verificar contraseña
+    const isValidPassword = authService.verifyPassword(password, user.password);
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        error: 'Correo o contraseña incorrectos'
+      });
+    }
+    
+    // Generar token JWT
+    const jwtToken = authService.generateJWT({
+      id: user.id_usuario,
+      email: user.correo_usuario,
+      name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
+      role: user.rol || 'estudiante'
+    });
+    
+    res.status(200).json({
+      success: true,
+      user: {
+        id: user.id_usuario,
+        email: user.correo_usuario,
+        name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
+        role: user.rol || 'estudiante',
+        isFirstLogin: user.rol === 'profesor' 
+          ? false
+          : String(user.primer_login || '').trim().toLowerCase() !== 'si'
+      },
+      token: jwtToken
+    });
+    
+  } catch (error) {
+    console.error('Error al iniciar sesión:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al iniciar sesión',
+      details: error.message
+    });
+  }
+};
+
+/**
+ * Envía un código de verificación al correo
+ * @param {Object} req - Objeto de solicitud Express
+ * @param {Object} res - Objeto de respuesta Express
+ */
+const sendVerificationCode = async (req, res) => {
+  try {
+    const { email, captchaToken } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Se requiere correo electrónico'
+      });
+    }
+    
+    // Verificar CAPTCHA
+    if (captchaToken) {
+      const isValidCaptcha = await authService.verifyCaptcha(captchaToken);
+      if (!isValidCaptcha) {
+        return res.status(400).json({
+          success: false,
+          error: 'Verificación CAPTCHA fallida'
+        });
+      }
+    }
+    
+    // Generar código
+    const code = authService.generateVerificationCode(email);
+    
+    // Enviar correo
+    const emailSent = await authService.sendVerificationEmail(email, code);
+    
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        error: 'Error al enviar el correo de verificación'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: 'Código de verificación enviado'
+    });
+    
+  } catch (error) {
+    console.error('Error al enviar código de verificación:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al enviar el código de verificación',
+      details: error.message
+    });
+  }
+};
+
+/**
+ * Verifica el código enviado por correo y autentica
+ * @param {Object} req - Objeto de solicitud Express
+ * @param {Object} res - Objeto de respuesta Express
+ */
+const verifyCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    
+    if (!email || !code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Se requieren correo y código de verificación'
+      });
+    }
+    
+    // Verificar código
+    const isValidCode = authService.verifyCode(email, code);
+    if (!isValidCode) {
+      return res.status(401).json({
+        success: false,
+        error: 'Código inválido o expirado'
+      });
+    }
+    
+    // Buscar usuario o crearlo si no existe
+    let user = await usersService.findUserByEmail(email);
+    
+    if (!user) {
+      // Crear usuario nuevo si no existe
+      const userData = {
+        correo_usuario: email,
+        nombre_usuario: email.split('@')[0], // Nombre temporal basado en correo
+        rol: 'estudiante',
+        primer_login: 'si'
+      };
+      
+      user = await usersService.createUser(userData);
+    }
+    
+    // Generar token JWT
+    const jwtToken = authService.generateJWT({
+      id: user.id_usuario,
+      email: user.correo_usuario,
+      name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
+      role: user.rol || 'estudiante'
+    });
+    
+    res.status(200).json({
+      success: true,
+      user: {
+        id: user.id_usuario,
+        email: user.correo_usuario,
+        name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
+        role: user.rol || 'estudiante',
+        isFirstLogin: user.rol === 'profesor' 
+          ? false
+          : String(user.primer_login || '').trim().toLowerCase() !== 'si'
+      },
+      token: jwtToken
+    });
+    
+  } catch (error) {
+    console.error('Error al verificar código:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al verificar código',
+      details: error.message
+    });
+  }
 };
 
 module.exports = {
   googleAuth,
-  login // Assuming login just calls googleAuth
+  login,
+  register,
+  sendVerificationCode,
+  verifyCode
 };
