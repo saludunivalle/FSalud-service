@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const axios = require('axios');
 require('dotenv').config();
+const emailService = require('./emailService');
 
 // Cliente OAuth2 para verificar tokens
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -177,12 +178,7 @@ exports.verifyCaptcha = async (token) => {
  */
 exports.sendVerificationEmail = async (email, code) => {
   try {
-    // Aquí deberías integrar con un servicio de correo como Nodemailer, SendGrid, etc.
-    // Por ahora, simulamos el envío
-    console.log(`Sending verification code ${code} to ${email}`);
-    
-    // Simular éxito en desarrollo
-    return true;
+    return await emailService.sendVerificationCode(email, code);
   } catch (error) {
     console.error('Error sending verification email:', error);
     return false;

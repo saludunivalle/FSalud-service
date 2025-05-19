@@ -266,7 +266,7 @@ const sendVerificationCode = async (req, res) => {
       });
     }
     
-    // Verificar CAPTCHA
+    // Verificar CAPTCHA (si se proporciona)
     if (captchaToken) {
       const isValidCaptcha = await authService.verifyCaptcha(captchaToken);
       if (!isValidCaptcha) {
@@ -290,10 +290,13 @@ const sendVerificationCode = async (req, res) => {
       });
     }
     
-    res.status(200).json({
+    // Preparar respuesta
+    const response = {
       success: true,
       message: 'Código de verificación enviado'
-    });
+    };
+
+    res.status(200).json(response);
     
   } catch (error) {
     console.error('Error al enviar código de verificación:', error);
