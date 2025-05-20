@@ -48,14 +48,17 @@ const saveUser = async (req, res) => {
 const updateFirstLogin = async (req, res) => {
   try {
     const { id } = req.params;
-    // Extraer los campos adicionales del req.body
+    // Extraer los campos adicionales del req.body, añadiendo nombre_usuario y apellido_usuario
     const { 
       programa_academico, 
       documento_usuario, 
       tipoDoc, 
       telefono,
       fecha_nac, 
-      email 
+      email,
+      nombre_usuario,   
+      apellido_usuario, 
+      rol             
     } = req.body;
 
     if (!id) {
@@ -79,7 +82,10 @@ const updateFirstLogin = async (req, res) => {
       tipoDoc,
       telefono,
       fecha_nac,
-      email    
+      email,
+      nombre_usuario,    // Añadido
+      apellido_usuario,  // Añadido
+      rol                // Añadido
     });
 
     res.status(200).json({

@@ -70,8 +70,9 @@ exports.updateUserFirstLogin = async (userId, data) => {
   try {
     console.log(`Actualizando primer inicio de sesión para usuario ${userId} con datos:`, data);
     
-    // Preparar datos para actualización
+    // Preparar datos para actualización con todos los campos relevantes
     const updateData = {
+      // Make sure to include all fields that should be updated
       programa_academico: data.programa_academico,
       documento_usuario: data.documento_usuario,
       tipoDoc: data.tipoDoc,
@@ -79,8 +80,13 @@ exports.updateUserFirstLogin = async (userId, data) => {
       fecha_nac: data.fecha_nac,        
       email: data.email,                // Personal email
       correo_usuario: data.correo_usuario || data.email, // Preserve institutional email if provided
+      rol: data.rol || 'estudiante',  // Default to 'estudiante' if not provided
       primer_login: 'si'                
     };
+    
+    // If you're updating nombre_usuario and apellido_usuario, include them
+    if (data.nombre_usuario) updateData.nombre_usuario = data.nombre_usuario;
+    if (data.apellido_usuario) updateData.apellido_usuario = data.apellido_usuario;
     
     // Actualizar usuario
     const updatedUser = await usersRepository.update('id_usuario', userId, updateData);

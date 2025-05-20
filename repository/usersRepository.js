@@ -2,15 +2,28 @@
 const { BaseRepository } = require('./baseRepository');
 const { generateUserId } = require('../utils/idGenerator'); // generateUserId ya no se usa aquí directamente
 
+// Update the headers array to match exactly with your Google Sheet columns
 const HEADERS = [
-  'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
-  'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 'direccion', 
-  'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
+  'id_usuario', 
+  'correo_usuario', 
+  'nombre_usuario', 
+  'apellido_usuario',
+  'programa_academico', 
+  'documento_usuario', 
+  'tipoDoc', 
+  'telefono', 
+  'observaciones', 
+  'fecha_nac', 
+  'email', 
+  'rol', 
+  'admin', 
+  'primer_login'
 ];
 
 class UsersRepository extends BaseRepository {
   constructor() {
     super('USUARIOS', HEADERS);
+    // Additional initialization if needed
   }
   
   /**
