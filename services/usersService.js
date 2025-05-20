@@ -30,7 +30,7 @@ exports.findUserById = async (userId) => {
     const client = sheetsService.getClient();
     const response = await client.spreadsheets.values.get({
       spreadsheetId: sheetsService.spreadsheetId,
-      range: 'USUARIOS!A2:O', 
+      range: 'USUARIOS!A2:N', 
     });
 
     const rows = response.data.values || [];
@@ -42,7 +42,7 @@ exports.findUserById = async (userId) => {
     const HEADERS = [ 
       'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
       'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
-      'direccion', 'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
+      'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
     ];
     HEADERS.forEach((header, index) => {
       user[header] = userRow[index] || (header === 'primer_login' ? 'no' : '');
@@ -70,27 +70,16 @@ exports.updateUserFirstLogin = async (userId, data) => {
   try {
     console.log(`Actualizando primer inicio de sesión para usuario ${userId} con datos:`, data);
     
-    // Actualizar campos requeridos si los nuevos son obligatorios
-    const requiredFields = [
-      'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
-      'direccion', 'fecha_nac', 'email' 
-    ];
-    const missingFields = requiredFields.filter(field => !data[field]);
-    
-    if (missingFields.length > 0) {
-      throw new Error(`Campos requeridos faltantes: ${missingFields.join(', ')}`);
-    }
-    
     // Preparar datos para actualización
     const updateData = {
       programa_academico: data.programa_academico,
       documento_usuario: data.documento_usuario,
       tipoDoc: data.tipoDoc,
-      telefono: data.telefono,
-      direccion: data.direccion,         // Nuevo
-      fecha_nac: data.fecha_nac,         // Nuevo
-      email: data.email,                 // Nuevo (email personal)
-      primer_login: 'si'                 // Marcar que ya completó el primer login
+      telefono: data.telefono,     
+      fecha_nac: data.fecha_nac,        
+      email: data.email,                // Personal email
+      correo_usuario: data.correo_usuario || data.email, // Preserve institutional email if provided
+      primer_login: 'si'                
     };
     
     // Actualizar usuario
@@ -134,7 +123,6 @@ exports.createUser = async (googleUserData) => {
       documento_usuario: '',
       tipoDoc: '',
       telefono: '',
-      direccion: '',
       observaciones: '',
       fecha_nac: '',
       email: '', 
