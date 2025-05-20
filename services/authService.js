@@ -150,22 +150,41 @@ exports.verifyCode = (email, code) => {
 };
 
 /**
- * Verifica un token de reCAPTCHA
- * @param {string} token - Token de reCAPTCHA
+ * Verifica un token de reCAPTCHA con Google
+ * @param {string} token - Token de reCAPTCHA a verificar
  * @returns {Promise<boolean>} - True si el token es válido
  */
-exports.verifyCaptcha = async (token) => {
+const verifyCaptcha = async (token) => {
   try {
-    const response = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
-      params: {
-        secret: process.env.RECAPTCHA_SECRET_KEY,
-        response: token
-      }
-    });
+    if (!token) return false;
     
-    return response.data.success;
+    // Si estamos en desarrollo, aceptar cualquier token (opcional)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('MODO DESARROLLO: Saltando verificación reCAPTCHA');
+      return true;
+    }
+    
+    // Verificar el token con la API de Google
+    const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+    if (!secretKey) {
+      console.error('ERROR: RECAPTCHA_SECRET_KEY no está configurada');
+      return false;
+    }
+    
+    const response = await axios.post(
+      'https://www.google.com/recaptcha/api/siteverify',
+      null,
+      {
+        params: {
+          secret: secretKey,
+          response: token
+        }
+      }
+    );
+    
+    return response.data.success === true;
   } catch (error) {
-    console.error('Error verificando CAPTCHA:', error);
+    console.error('Error al verificar reCAPTCHA:', error);
     return false;
   }
 };
@@ -184,3 +203,6 @@ exports.sendVerificationEmail = async (email, code) => {
     return false;
   }
 };
+
+// Add this line to export the function
+exports.verifyCaptcha = verifyCaptcha;
