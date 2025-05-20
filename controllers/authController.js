@@ -82,8 +82,8 @@ const googleAuth = async (req, res) => {
         name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
         role: user.rol,
         isFirstLogin: user.rol === 'profesor' 
-          ? false
-          : String(user.primer_login || '').trim().toLowerCase() !== 'si'
+          ? false 
+          : String(user.primer_login || '').trim().toLowerCase() === 'no'
       },
       token: jwtToken
     });
@@ -234,8 +234,8 @@ const login = async (req, res) => {
         name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
         role: user.rol || 'estudiante',
         isFirstLogin: user.rol === 'profesor' 
-          ? false
-          : String(user.primer_login || '').trim().toLowerCase() !== 'si'
+          ? false 
+          : String(user.primer_login || '').trim().toLowerCase() === 'no'
       },
       token: jwtToken
     });

@@ -30,22 +30,34 @@ class SheetsService {
    */
   async findUserByEmail(email) {
     try {
+      console.log(`Finding user by email: ${email}`);
       const client = this.getClient();
       const response = await client.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'USUARIOS!A2:C',
+        range: 'USUARIOS!A2:N', // Get all columns including primer_login
       });
 
       const rows = response.data.values || [];
-      const user = rows.find(row => row[1] === email);
+      const userRow = rows.find(row => row[1] === email); // Email is in column B
       
-      return user ? {
-        id_usuario: user[0],
-        correo_usuario: user[1],
-        nombre_usuario: user[2]
-      } : null;
+      if (!userRow) return null;
+
+      // Map the full row to user object
+      const HEADERS = [ 
+        'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
+        'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
+        'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
+      ];
+      
+      const user = {};
+      HEADERS.forEach((header, index) => {
+        user[header] = userRow[index] || (header === 'primer_login' ? 'no' : '');
+      });
+      
+      console.log(`User found by email ${email}:`, user);
+      return user;
     } catch (error) {
-      console.error('Error buscando usuario por email:', error);
+      console.error(`Error finding user by email ${email}:`, error);
       return null;
     }
   }

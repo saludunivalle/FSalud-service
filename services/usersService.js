@@ -72,23 +72,23 @@ exports.updateUserFirstLogin = async (userId, data) => {
     
     // Preparar datos para actualización con todos los campos relevantes
     const updateData = {
-      // Make sure to include all fields that should be updated
+      // Asegurarse de que todos los campos necesarios estén presentes
       programa_academico: data.programa_academico,
       documento_usuario: data.documento_usuario,
       tipoDoc: data.tipoDoc,
-      telefono: data.telefono,     
-      fecha_nac: data.fecha_nac,        
-      email: data.email,                // Personal email
-      correo_usuario: data.correo_usuario || data.email, // Preserve institutional email if provided
-      rol: data.rol || 'estudiante',  // Default to 'estudiante' if not provided
-      primer_login: 'si'                
+      telefono: data.telefono,
+      fecha_nac: data.fecha_nac,
+      email: data.email,
+      correo_usuario: data.correo_usuario || data.email,
+      rol: data.rol || 'estudiante',
+      primer_login: 'si'  // Han completado el formulario, así que se establece en 'si'
     };
     
-    // If you're updating nombre_usuario and apellido_usuario, include them
+    // Incluir campos de nombre si están proporcionados
     if (data.nombre_usuario) updateData.nombre_usuario = data.nombre_usuario;
     if (data.apellido_usuario) updateData.apellido_usuario = data.apellido_usuario;
     
-    // Actualizar usuario
+    console.log(`Datos finales de actualización para el usuario ${userId}:`, updateData);
     const updatedUser = await usersRepository.update('id_usuario', userId, updateData);
     
     if (!updatedUser) {
