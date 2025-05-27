@@ -124,7 +124,7 @@ exports.subirDocumento = async (req, res) => {
     }
 
     // Extraer datos del cuerpo (después de que Multer procese)
-    const { userId, documentType, expeditionDate, expirationDate, userName, userEmail } = req.body;
+    const { userId, documentType, expeditionDate, expirationDate, userName, userEmail, numeroDosis } = req.body;
 
     // --- ADDED Logging ---
     console.log('Extracted userId:', userId);
@@ -160,7 +160,8 @@ exports.subirDocumento = async (req, res) => {
           expirationDate, // Puede ser undefined
           userName,
           userEmail
-      }
+      },
+      numeroDosis ? parseInt(numeroDosis) : null // Número de dosis específica
     );
 
     // Responder con éxito
@@ -181,6 +182,38 @@ exports.subirDocumento = async (req, res) => {
       // Proporcionar detalles del error SÓLO si es seguro (evitar exponer detalles internos)
       // En desarrollo, puedes enviar error.message, pero en producción considera un mensaje genérico.
       details: error.message || 'Ocurrió un error inesperado en el servidor.'
+    });
+  }
+};
+
+/**
+ * Obtiene información de dosis de un documento específico
+ * @param {Object} req - Objeto de solicitud Express
+ * @param {Object} res - Objeto de respuesta Express
+ */
+exports.getDocumentDoses = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Se requiere el ID del documento'
+      });
+    }
+    
+    const doseInfo = await documentsService.getDocumentDoses(id);
+    
+    res.status(200).json({
+      success: true,
+      data: doseInfo
+    });
+  } catch (error) {
+    console.error('Error al obtener información de dosis:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener información de dosis',
+      details: error.message
     });
   }
 };

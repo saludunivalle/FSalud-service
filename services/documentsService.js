@@ -41,23 +41,31 @@ exports.getTipoDocumentoById = async (id) => {
  */
 exports.getDocumentosUsuario = async (userId) => {
   try {
-    // Obtener documentos del usuario
+    // Obtener documentos del usuario - ahora incluyen nombre_doc y dosis directamente
     const documentosUsuario = await documentosUsuariosRepository.findByUsuario(userId);
     
-    // Obtener todos los tipos de documentos para cruzar información
+    // Obtener todos los tipos de documentos para información adicional (vence, tiempo_vencimiento)
     const tiposDocumentos = await documentosRepository.getAll();
     
-    // Mapear los documentos para incluir información del tipo de documento
+    // Mapear los documentos para incluir información adicional del tipo de documento
     const documentosCompletos = documentosUsuario.map(docUsuario => {
       const tipoDocumento = tiposDocumentos.find(
-        tipo => tipo.id_tipoDoc === docUsuario.id_doc
-      ) || { nombre_tipoDoc: 'Desconocido', vence: false, tiempo_vencimiento: 0 };
+        tipo => tipo.id_doc === docUsuario.id_doc
+      ) || { 
+        vence: false, 
+        tiempo_vencimiento: 0
+      };
       
       return {
         ...docUsuario,
-        nombre_tipoDoc: tipoDocumento.nombre_tipoDoc,
+        // Usar nombre_doc y dosis de la hoja DOCUMENTOS_USUARIOS
+        nombre_doc: docUsuario.nombre_doc || tipoDocumento.nombre_doc || 'Desconocido',
+        dosis: docUsuario.dosis || tipoDocumento.dosis || 1,
+        // Información adicional del tipo de documento
         vence: tipoDocumento.vence,
-        tiempo_vencimiento: tipoDocumento.tiempo_vencimiento
+        tiempo_vencimiento: tipoDocumento.tiempo_vencimiento,
+        // Mantener compatibilidad con numero_dosis para el frontend
+        numero_dosis: docUsuario.dosis
       };
     });
     
@@ -106,29 +114,67 @@ const isDocumentoVencido = (documento) => {
  */
 exports.getDocumentosPendientes = async () => {
   try {
-    // Obtener documentos sin revisar
+    // Obtener documentos sin revisar - ahora incluyen nombre_doc y dosis directamente
     const documentos = await documentosUsuariosRepository.findByEstado('Sin revisar');
     
-    // Obtener todos los tipos de documentos para cruzar información
+    // Obtener todos los tipos de documentos para información adicional (vence, tiempo_vencimiento)
     const tiposDocumentos = await documentosRepository.getAll();
     
-    // Mapear los documentos para incluir información del tipo de documento
+    // Mapear los documentos para incluir información adicional del tipo de documento
     const documentosCompletos = documentos.map(docUsuario => {
       const tipoDocumento = tiposDocumentos.find(
-        tipo => tipo.id_tipoDoc === docUsuario.id_doc
-      ) || { nombre_tipoDoc: 'Desconocido', vence: false, tiempo_vencimiento: 0 };
+        tipo => tipo.id_doc === docUsuario.id_doc
+      ) || { 
+        vence: false, 
+        tiempo_vencimiento: 0
+      };
       
       return {
         ...docUsuario,
-        nombre_tipoDoc: tipoDocumento.nombre_tipoDoc,
+        // Usar nombre_doc y dosis de la hoja DOCUMENTOS_USUARIOS
+        nombre_doc: docUsuario.nombre_doc || tipoDocumento.nombre_doc || 'Desconocido',
+        dosis: docUsuario.dosis || tipoDocumento.dosis || 1,
+        // Información adicional del tipo de documento
         vence: tipoDocumento.vence,
-        tiempo_vencimiento: tipoDocumento.tiempo_vencimiento
+        tiempo_vencimiento: tipoDocumento.tiempo_vencimiento,
+        // Mantener compatibilidad con numero_dosis para el frontend
+        numero_dosis: docUsuario.dosis
       };
     });
     
     return documentosCompletos;
   } catch (error) {
     console.error('Error al obtener documentos pendientes:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtiene información de dosis de un documento específico
+ * @param {string} docId - ID del documento
+ * @returns {Promise<Object>} - Información de dosis del documento
+ */
+exports.getDocumentDoses = async (docId) => {
+  try {
+    // Obtener información del tipo de documento
+    const tipoDocumento = await documentosRepository.findOneBy('id_doc', docId);
+    if (!tipoDocumento) {
+      throw new Error(`Documento con ID ${docId} no encontrado.`);
+    }
+    
+    const dosis = parseInt(tipoDocumento.dosis) || 1;
+    const isMultiDose = dosis > 1;
+    
+    return {
+      id_doc: docId,
+      nombre_doc: tipoDocumento.nombre_doc,
+      total_dosis: dosis,
+      es_multidosis: isMultiDose,
+      vence: tipoDocumento.vence,
+      tiempo_vencimiento: tipoDocumento.tiempo_vencimiento
+    };
+  } catch (error) {
+    console.error(`Error al obtener información de dosis para documento ${docId}:`, error);
     throw error;
   }
 };
@@ -143,7 +189,7 @@ exports.getDocumentosPendientes = async () => {
  * @param {object} metadata - Metadatos adicionales { expeditionDate, expirationDate?, userName?, userEmail? }
  * @returns {Promise<Object>} - Información del documento subido/actualizado
  */
-exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeType, metadata) => {
+exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeType, metadata, numeroDosis = null) => {
   try {
     console.log(`Iniciando subida para User: ${userId}, DocType: ${tipoDocId}, File: ${fileName}`);
     // Validar tipo de archivo (ya se hace en middleware, pero doble check no hace daño)
@@ -159,11 +205,11 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
     }
 
     // Verificar si el tipo de documento existe
-    const tipoDocumento = await documentosRepository.findOneBy('id_tipoDoc', tipoDocId);
+    const tipoDocumento = await documentosRepository.findOneBy('id_doc', tipoDocId);
     if (!tipoDocumento) {
       throw new Error(`Tipo de documento con ID ${tipoDocId} no encontrado.`);
     }
-    console.log(`Tipo de documento "${tipoDocumento.nombre_tipoDoc}" encontrado.`);
+    console.log(`Tipo de documento "${tipoDocumento.nombre_doc}" encontrado.`);
 
     // Verificar si el usuario existe (opcional pero recomendado)
     const userExists = await usersRepository.findOneBy('id_usuario', userId);
@@ -180,12 +226,12 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
     console.log(`Carpeta de usuario ID: ${carpetaUsuarioId}`);
     // --- Fin Gestión de Carpetas ---
 
-    const documentoExistente = await documentosUsuariosRepository.findDocumentoUsuario(userId, tipoDocId);
+    const documentoExistente = await documentosUsuariosRepository.findDocumentoUsuario(userId, tipoDocId, numeroDosis);
 
     let documentoInfoDb;
 
     const fileExtension = fileName.split('.').pop() || 'file';
-    const driveFileName = `${tipoDocumento.nombre_tipoDoc}_${userId}_${Date.now()}.${fileExtension}`;
+    const driveFileName = `${tipoDocumento.nombre_doc}_${userId}_${Date.now()}.${fileExtension}`;
 
     if (documentoExistente) {
       console.log(`Documento existente encontrado (ID: ${documentoExistente.id_usuarioDoc}). Actualizando...`);
@@ -215,6 +261,8 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
       console.log("Nuevo archivo subido a Drive:", fileInfoDrive);
 
       const updateData = {
+        nombre_doc: tipoDocumento.nombre_doc,
+        dosis: numeroDosis || documentoExistente.dosis || 1,
         fecha_cargue: new Date().toISOString().split('T')[0],
         revision: '0',
         fecha_revision: '',
@@ -245,6 +293,8 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
         id_usuarioDoc: generateUUID(),
         id_persona: userId,
         id_doc: tipoDocId,
+        nombre_doc: tipoDocumento.nombre_doc,
+        dosis: numeroDosis || 1, // Por defecto dosis 1 si no se especifica
         fecha_cargue: new Date().toISOString().split('T')[0],
         revision: '0',
         fecha_revision: '',

@@ -15,7 +15,7 @@ exports.fetchAllPrograms = async () => {
       throw new Error('Google Sheets ID no está configurado en el backend.');
     }
 
-    const range = 'PROGRAMAS!A2:A'; // Columna A, desde la fila 2
+    const range = 'PROGRAMAS!A1:A'; // Columna A, incluye la fila de encabezado para verificar que sea "Programa Académico"
     console.log(`[programsService] Fetching programs from range: ${range}`);
 
     const response = await client.spreadsheets.values.get({
@@ -26,7 +26,21 @@ exports.fetchAllPrograms = async () => {
     const rows = response.data.values || [];
     console.log(`[programsService] Rows fetched: ${rows.length}`);
 
+    // Verificar que el encabezado sea correcto y omitir la primera fila
+    if (rows.length === 0) {
+      console.log('[programsService] No data found in the sheet');
+      return [];
+    }
+
+    // Verificar el encabezado (primera fila)
+    const header = rows[0] && rows[0][0];
+    if (header !== 'Programa Académico') {
+      console.warn(`[programsService] Expected header "Programa Académico" but found "${header}"`);
+    }
+
+    // Procesar las filas de datos (omitir la primera fila que es el encabezado)
     const programs = rows
+      .slice(1) // Omitir el encabezado
       .map(row => row[0]) // Tomar el primer elemento de cada fila (columna A)
       .filter(programName => programName && programName.trim() !== '') // Filtrar nombres vacíos o solo espacios
       .map(programName => ({

@@ -10,36 +10,16 @@ module.exports = async (req, res) => {
     
     // Rutas POST
     if (req.method === 'POST') {
-      // Login regular con correo y contraseña
-      if (endpoint === 'login') {
-        return await authController.login(req, res);
-      }
-      
-      // Registro con correo y contraseña
-      if (endpoint === 'register') {
-        return await authController.register(req, res);
-      }
-      
-      // Autenticación con Google
+      // Autenticación con Google - única opción disponible
       if (endpoint === 'google') {
         return await authController.googleAuth(req, res);
-      }
-      
-      // Enviar código de verificación
-      if (endpoint === 'send-code') {
-        return await authController.sendVerificationCode(req, res);
-      }
-      
-      // Verificar código
-      if (endpoint === 'verify-code') {
-        return await authController.verifyCode(req, res);
       }
     }
     
     // Si no se encuentra ninguna ruta válida
     return res.status(404).json({ 
       success: false,
-      error: 'Ruta de autenticación no encontrada',
+      error: 'Ruta de autenticación no encontrada. Solo está disponible la autenticación con Google.',
       path: path
     });
     

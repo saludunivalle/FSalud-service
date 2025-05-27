@@ -165,6 +165,11 @@ async function handleApiRequest(req, res) {
       const documentsHandler = require('./documents');
       return await documentsHandler(req, res);
     }
+
+    if (path.startsWith('/api/programs/') || path === '/api/programs') {
+      const programsHandler = require('./programs');
+      return await programsHandler(req, res);
+    }
     // --- End sub-router handlers ---
 
     // Ruta no encontrada

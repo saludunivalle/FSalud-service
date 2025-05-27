@@ -38,6 +38,12 @@ module.exports = async (req, res) => {
         req.params = { id: param };
         return await documentosController.getDocumentosUsuario(req, res);
       }
+      
+      // Obtener información de dosis de un documento (GET /api/documentos/dosis/{doc_id})
+      if (endpoint === 'dosis' && param) {
+        req.params = { id: param };
+        return await documentosController.getDocumentDoses(req, res);
+      }
 
       // Obtener datos solo para administradores (GET /api/documentos/some-admin-only-data/{param})
       if (endpoint === 'some-admin-only-data' && param) {

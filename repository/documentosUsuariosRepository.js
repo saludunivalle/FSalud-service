@@ -2,10 +2,8 @@ const { BaseRepository } = require('./baseRepository');
 const { generateUUID } = require('../utils/idGenerator');
 
 const HEADERS = [
-  'id_usuarioDoc', 'id_persona', 'id_doc', 'fecha_cargue', 
-  'fecha_expedicion', // Added
-  'fecha_vencimiento', // Added
-  'revision', 'fecha_revision', 'estado', 'ruta_archivo'
+  'id_usuarioDoc', 'id_persona', 'id_doc', 'nombre_doc', 'dosis', 'fecha_cargue', 
+  'fecha_expedicion', 'fecha_vencimiento', 'revision', 'fecha_revision', 'estado', 'ruta_archivo'
 ];
 
 class DocumentosUsuariosRepository extends BaseRepository {
@@ -68,13 +66,32 @@ class DocumentosUsuariosRepository extends BaseRepository {
    * Encuentra un documento específico de un usuario
    * @param {string} idPersona - ID del usuario
    * @param {string} idDoc - ID del tipo de documento
+   * @param {number|string} numeroDosis - Número de dosis específica (opcional)
    * @returns {Promise<Object|null>} - Documento encontrado o null
    */
-  async findDocumentoUsuario(idPersona, idDoc) {
+  async findDocumentoUsuario(idPersona, idDoc, numeroDosis = null) {
     const documentos = await this.getAll();
-    return documentos.find(doc => 
+    return documentos.find(doc => {
+      const matchBasic = doc.id_persona === idPersona && doc.id_doc === idDoc;
+      if (numeroDosis === null) {
+        return matchBasic;
+      }
+      // Comparar dosis - puede ser número o string (para COVID)
+      return matchBasic && doc.dosis === numeroDosis.toString();
+    }) || null;
+  }
+
+  /**
+   * Encuentra todos los documentos de un usuario para un tipo de documento específico
+   * @param {string} idPersona - ID del usuario
+   * @param {string} idDoc - ID del tipo de documento
+   * @returns {Promise<Array>} - Lista de documentos encontrados
+   */
+  async findDocumentosUsuarioTipo(idPersona, idDoc) {
+    const documentos = await this.getAll();
+    return documentos.filter(doc => 
       doc.id_persona === idPersona && doc.id_doc === idDoc
-    ) || null;
+    );
   }
   
   /**
