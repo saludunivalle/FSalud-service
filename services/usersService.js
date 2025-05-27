@@ -48,9 +48,9 @@ exports.findUserById = async (userId) => {
       user[header] = userRow[index] || (header === 'primer_login' ? 'no' : '');
     });
 
-    // Si el correo del usuario está en la columna admin, asignar rol profesor
+    // Si el correo del usuario está en la columna admin, asignar rol admin
     if (user.admin && user.admin.trim() === user.correo_usuario) {
-      user.rol = 'profesor';
+      user.rol = 'admin';
     }
 
     return user;
@@ -104,6 +104,38 @@ exports.updateUserFirstLogin = async (userId, data) => {
 };
 
 /**
+ * Verifica si un email está en la lista de admins del Google Sheets
+ * @param {string} email - Email a verificar
+ * @returns {Promise<boolean>} - true si el email está en la columna admin
+ */
+exports.isEmailAdmin = async (email) => {
+  try {
+    console.log(`[isEmailAdmin] Verificando si ${email} es admin...`);
+    const client = sheetsService.getClient();
+    const response = await client.spreadsheets.values.get({
+      spreadsheetId: sheetsService.spreadsheetId,
+      range: 'USUARIOS!M2:M', // Columna admin (M)
+    });
+
+    console.log(`[isEmailAdmin] Respuesta de Google Sheets para columna admin:`, JSON.stringify(response.data, null, 2));
+    
+    const adminEmails = response.data.values || [];
+    const adminEmailList = adminEmails.flat().filter(email => email && email.trim() !== '');
+    
+    console.log(`[isEmailAdmin] Lista de emails admin encontrados:`, adminEmailList);
+    console.log(`[isEmailAdmin] Buscando email: "${email}" en lista:`, adminEmailList);
+    
+    const isAdmin = adminEmailList.includes(email);
+    console.log(`[isEmailAdmin] Email ${email} ${isAdmin ? 'SÍ' : 'NO'} está en la lista de admins`);
+    
+    return isAdmin;
+  } catch (error) {
+    console.error('[isEmailAdmin] Error verificando si email es admin:', error);
+    return false;
+  }
+};
+
+/**
  * Crea un nuevo usuario en la base de datos usando el repositorio
  * @param {Object} googleUserData - Datos del usuario de Google { googleId, email, name }
  * @returns {Promise<Object>} - Usuario creado
@@ -121,19 +153,25 @@ exports.createUser = async (googleUserData) => {
       throw new Error('No se pudo obtener el ID de Google para crear el usuario.');
     }
 
+    // Verificar si el usuario debe ser admin
+    const isAdmin = await this.isEmailAdmin(googleUserData.email);
+    console.log(`[usersService.createUser] Usuario ${googleUserData.email} ${isAdmin ? 'SÍ' : 'NO'} es admin`);
+
     const newUser = {
       id_usuario: String(googleUserData.googleId),
       correo_usuario: googleUserData.email,
       nombre_usuario: nombre,
       apellido_usuario: apellido,
+      programa_academico: '', 
       documento_usuario: '',
       tipoDoc: '',
       telefono: '',
       observaciones: '',
       fecha_nac: '',
       email: '', 
-      rol: 'estudiante',
-      primer_login: 'no' // Correctly set for new users
+      rol: isAdmin ? 'admin' : 'estudiante',
+      admin: isAdmin ? googleUserData.email : '', // Si es admin, poner su email en la columna admin
+      primer_login: isAdmin ? 'si' : 'no' // Los admins no necesitan completar FirstLoginForm
     };
 
     console.log('[usersService.createUser] Objeto newUser construido para el repositorio:', JSON.stringify(newUser, null, 2));
@@ -141,6 +179,12 @@ exports.createUser = async (googleUserData) => {
     const createdUser = await usersRepository.createUser(newUser);
     
     console.log('[usersService.createUser] Respuesta del repositorio usersRepository.createUser:', JSON.stringify(createdUser, null, 2));
+    
+    // Verificar que el usuario fue creado correctamente
+    if (!createdUser || !createdUser.id_usuario) {
+      throw new Error('El usuario no fue creado correctamente en el repositorio');
+    }
+    
     return createdUser;
 
   } catch (error) {
@@ -154,37 +198,202 @@ exports.createUser = async (googleUserData) => {
 };
 
 /**
+ * Actualiza automáticamente los datos básicos de un usuario admin
+ * @param {string} userId - ID del usuario
+ * @param {Object} googleUserData - Datos del usuario de Google
+ * @returns {Promise<Object>} - Usuario actualizado
+ */
+exports.updateAdminUserData = async (userId, googleUserData) => {
+  try {
+    console.log(`Actualizando datos de admin para usuario ${userId} con datos de Google:`, googleUserData);
+    
+    const nameParts = googleUserData.name ? googleUserData.name.split(' ') : [''];
+    const nombre = nameParts[0] || '';
+    const apellido = nameParts.slice(1).join(' ') || '';
+    
+    const updateData = {
+      id_usuario: String(googleUserData.googleId),
+      correo_usuario: googleUserData.email,
+      nombre_usuario: nombre,
+      apellido_usuario: apellido,
+      rol: 'admin',
+      primer_login: 'si' // Los admins no necesitan completar FirstLoginForm
+    };
+    
+    console.log(`Datos de actualización para admin ${userId}:`, updateData);
+    const updatedUser = await usersRepository.update('id_usuario', userId, updateData);
+    
+    if (!updatedUser) {
+      throw new Error(`Usuario admin con ID ${userId} no encontrado para actualizar`);
+    }
+    
+    console.log(`Datos de admin actualizados exitosamente para usuario ${userId}`);
+    return updatedUser;
+  } catch (error) {
+    console.error(`Error actualizando datos de admin: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Busca la fila que contiene un email en la columna admin pero sin datos de usuario
+ * @param {string} email - Email a buscar
+ * @returns {Promise<number>} - Índice de la fila (0-based) o -1 si no se encuentra
+ */
+exports.findAdminRowByEmail = async (email) => {
+  try {
+    console.log(`[findAdminRowByEmail] Buscando fila vacía con email admin: ${email}`);
+    const client = sheetsService.getClient();
+    const response = await client.spreadsheets.values.get({
+      spreadsheetId: sheetsService.spreadsheetId,
+      range: 'USUARIOS!A2:N', // Todas las columnas desde fila 2
+    });
+
+    const rows = response.data.values || [];
+    
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      // Verificar si la fila tiene el email en columna admin (índice 12) pero no tiene id_usuario (índice 0)
+      if (row[12] && row[12].trim() === email && (!row[0] || row[0].trim() === '')) {
+        console.log(`[findAdminRowByEmail] Encontrada fila vacía en posición ${i + 2} (fila del sheet) con email admin: ${email}`);
+        return i + 2; // +2 porque las filas en sheets empiezan en 1 y saltamos el header
+      }
+    }
+    
+    console.log(`[findAdminRowByEmail] No se encontró fila vacía con email admin: ${email}`);
+    return -1;
+  } catch (error) {
+    console.error('[findAdminRowByEmail] Error buscando fila admin:', error);
+    return -1;
+  }
+};
+
+/**
+ * Rellena una fila existente que tiene email en columna admin con datos del usuario
+ * @param {number} rowIndex - Índice de la fila en el sheet (1-based)
+ * @param {Object} googleUserData - Datos del usuario de Google
+ * @returns {Promise<Object>} - Usuario actualizado
+ */
+exports.fillAdminRow = async (rowIndex, googleUserData) => {
+  try {
+    console.log(`[fillAdminRow] Rellenando fila ${rowIndex} con datos de admin:`, googleUserData);
+    
+    const nameParts = googleUserData.name ? googleUserData.name.split(' ') : [''];
+    const nombre = nameParts[0] || '';
+    const apellido = nameParts.slice(1).join(' ') || '';
+    
+    const client = sheetsService.getClient();
+    
+    // Preparar los datos para todas las columnas
+    const values = [
+      String(googleUserData.googleId), // id_usuario
+      googleUserData.email,           // correo_usuario  
+      nombre,                         // nombre_usuario
+      apellido,                       // apellido_usuario
+      '',                            // programa_academico
+      '',                            // documento_usuario
+      '',                            // tipoDoc
+      '',                            // telefono
+      '',                            // observaciones
+      '',                            // fecha_nac
+      '',                            // email
+      'admin',                       // rol
+      googleUserData.email,          // admin (mantener el email)
+      'si'                           // primer_login
+    ];
+    
+    // Actualizar la fila específica
+    const response = await client.spreadsheets.values.update({
+      spreadsheetId: sheetsService.spreadsheetId,
+      range: `USUARIOS!A${rowIndex}:N${rowIndex}`,
+      valueInputOption: 'RAW',
+      resource: { values: [values] }
+    });
+    
+    console.log(`[fillAdminRow] Fila ${rowIndex} actualizada exitosamente:`, response.data);
+    
+    // Construir el objeto de usuario para retornar
+    const HEADERS = [ 
+      'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
+      'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
+      'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
+    ];
+    
+    const user = {};
+    HEADERS.forEach((header, index) => {
+      user[header] = values[index] || '';
+    });
+    
+    console.log(`[fillAdminRow] Usuario admin creado/actualizado en fila existente:`, user);
+    return user;
+    
+  } catch (error) {
+    console.error('[fillAdminRow] Error rellenando fila admin:', error);
+    throw error;
+  }
+};
+
+/**
  * Busca un usuario por correo, si no existe lo crea
  * @param {Object} googleUserData - Datos del usuario de Google { googleId, email, name }
  * @returns {Promise<Object>} - Usuario encontrado o creado
  */
 exports.findOrCreateUser = async (googleUserData) => {
   try {
-    console.log('findOrCreateUser - Buscando email:', googleUserData.email);
-    const existingUserByEmail = await this.findUserByEmail(googleUserData.email); // This returns partial data {id_usuario, correo_usuario, nombre_usuario}
+    console.log('[findOrCreateUser] Buscando email:', googleUserData.email);
+    
+    // Primero verificar si el email está en la lista de admins
+    const isEmailInAdminList = await this.isEmailAdmin(googleUserData.email);
+    console.log(`[findOrCreateUser] Email ${googleUserData.email} ${isEmailInAdminList ? 'SÍ' : 'NO'} está en lista de admins`);
+    
+    const existingUserByEmail = await this.findUserByEmail(googleUserData.email);
+    console.log(`[findOrCreateUser] Resultado de findUserByEmail:`, existingUserByEmail);
     
     if (existingUserByEmail && existingUserByEmail.id_usuario) {
-      console.log('findOrCreateUser - Usuario encontrado por email, obteniendo detalles completos para ID:', existingUserByEmail.id_usuario);
-      // Fetch the full user details to ensure all fields, including primer_login, are present
-      const fullExistingUser = await this.findUserById(existingUserByEmail.id_usuario);
-      if (fullExistingUser) {
-        console.log('findOrCreateUser - Detalles completos del usuario existente:', fullExistingUser);
-        return fullExistingUser;
+      console.log('[findOrCreateUser] Usuario encontrado por email, obteniendo detalles completos para ID:', existingUserByEmail.id_usuario);
+      
+      // Verificar si el usuario es admin (correo en columna admin)
+      const isAdmin = existingUserByEmail.admin && existingUserByEmail.admin.trim() === existingUserByEmail.correo_usuario;
+      
+      if (isAdmin || isEmailInAdminList) {
+        console.log('[findOrCreateUser] Usuario detectado como admin, actualizando datos automáticamente...');
+        // Actualizar automáticamente los datos del admin con información de Google
+        const updatedAdminUser = await this.updateAdminUserData(existingUserByEmail.id_usuario, googleUserData);
+        return updatedAdminUser;
       } else {
-        // This case implies an inconsistency if an ID was found by email but not by ID.
-        // Log a warning and proceed to create, though this might indicate a deeper issue.
-        console.warn(`findOrCreateUser - Usuario con ID ${existingUserByEmail.id_usuario} no encontrado por findUserById. Se intentará crear el usuario.`);
-        // Fall through to create the user.
+        // Para usuarios no admin, seguir el flujo normal
+        const fullExistingUser = await this.findUserById(existingUserByEmail.id_usuario);
+        if (fullExistingUser) {
+          console.log('[findOrCreateUser] Detalles completos del usuario existente:', fullExistingUser);
+          return fullExistingUser;
+        } else {
+          console.warn(`[findOrCreateUser] Usuario con ID ${existingUserByEmail.id_usuario} no encontrado por findUserById. Se intentará crear el usuario.`);
+        }
       }
     }
     
-    console.log('findOrCreateUser - Usuario no encontrado por email o detalles completos no recuperados, creando nuevo usuario...');
-    const newUser = await this.createUser(googleUserData); // createUser sets primer_login: 'no'
-    console.log('findOrCreateUser - Nuevo usuario creado:', newUser);
+    // Si no se encontró usuario existente, verificar si debe ser admin antes de crear
+    if (isEmailInAdminList) {
+      console.log('[findOrCreateUser] Email está en lista de admins, verificando si existe fila vacía con este email...');
+      
+      // Buscar si hay una fila en el sheets que tenga este email en la columna admin pero sin datos de usuario
+      const adminRowIndex = await this.findAdminRowByEmail(googleUserData.email);
+      if (adminRowIndex !== -1) {
+        console.log(`[findOrCreateUser] Encontrada fila vacía con email admin en posición ${adminRowIndex}, actualizando esa fila...`);
+        return await this.fillAdminRow(adminRowIndex, googleUserData);
+      } else {
+        console.log('[findOrCreateUser] No se encontró fila vacía, creando nueva fila como admin...');
+      }
+    } else {
+      console.log('[findOrCreateUser] Email no está en lista de admins, creando usuario regular...');
+    }
+    
+    const newUser = await this.createUser(googleUserData);
+    console.log('[findOrCreateUser] Nuevo usuario creado:', newUser);
     return newUser;
 
   } catch (error) {
-    console.error('Error en findOrCreateUser:', error);
+    console.error('[findOrCreateUser] Error en findOrCreateUser:', error);
     throw new Error(`Error procesando usuario ${googleUserData.email}: ${error.message}`);
   }
 };

@@ -137,7 +137,7 @@ class BaseRepository {
   async create(data) {
     try {
       console.log(`[BaseRepository.create] Intentando crear registro en hoja: ${this.sheetName}. Datos recibidos:`, JSON.stringify(data, null, 2));
-      const sheets = await getClient();
+      const sheets = getClient();
       
       // Asegurar que todos los headers tengan un valor, aunque sea vacío
       const values = [this.headers.map(header => data[header] === undefined ? '' : data[header])];

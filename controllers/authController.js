@@ -72,7 +72,7 @@ const googleAuth = async (req, res) => {
         email: user.correo_usuario,
         name: `${user.nombre_usuario || ''} ${user.apellido_usuario || ''}`.trim(),
         role: user.rol,
-        isFirstLogin: user.rol === 'profesor' 
+        isFirstLogin: (user.rol === 'admin' || user.rol === 'administrador') 
           ? false 
           : String(user.primer_login || '').trim().toLowerCase() === 'no'
       },

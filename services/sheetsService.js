@@ -54,6 +54,11 @@ class SheetsService {
         user[header] = userRow[index] || (header === 'primer_login' ? 'no' : '');
       });
       
+      // Si el correo del usuario está en la columna admin, asignar rol admin
+      if (user.admin && user.admin.trim() === user.correo_usuario) {
+        user.rol = 'admin';
+      }
+      
       console.log(`User found by email ${email}:`, user);
       return user;
     } catch (error) {
