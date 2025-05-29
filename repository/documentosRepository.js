@@ -42,6 +42,12 @@ class DocumentosRepository extends BaseRepository {
     const dosis = parseInt(doc.dosis);
     return !isNaN(dosis) && dosis > 1;
   }
+
+  async getAll() {
+    const documentos = await super.getAll();
+    console.log('Documentos obtenidos de la base de datos:', documentos);
+    return documentos;
+  }
 }
 
 module.exports = new DocumentosRepository();

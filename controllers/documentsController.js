@@ -12,6 +12,19 @@ exports.getTiposDocumentos = async (req, res) => {
   try {
     const tiposDocumentos = await documentsService.getTiposDocumentos();
     
+    // Agregar log para debugging
+    console.log('Tipos de documentos obtenidos:', tiposDocumentos);
+    
+    // Verificar que tenemos datos
+    if (!tiposDocumentos || tiposDocumentos.length === 0) {
+      console.warn('No se encontraron tipos de documentos en la base de datos');
+      return res.status(404).json({
+        success: false,
+        error: 'No se encontraron tipos de documentos'
+      });
+    }
+    
+    // Devolver en formato consistente con otros endpoints
     res.status(200).json({
       success: true,
       data: tiposDocumentos

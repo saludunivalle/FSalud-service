@@ -13,7 +13,29 @@ const { generateUUID } = require('../utils/idGenerator');
 exports.getTiposDocumentos = async () => {
   try {
     const tiposDocumentos = await documentosRepository.getAll();
-    return tiposDocumentos;
+    
+    // Agregar log para debugging
+    console.log('Documentos obtenidos del repositorio:', tiposDocumentos);
+    
+    // Verificar que tenemos los campos necesarios - CORREGIDO PARA INCLUIR TODOS LOS DOCUMENTOS
+    const documentosValidos = tiposDocumentos.map(doc => {
+      // Asegurar que el documento tenga nombre_doc
+      if (!doc.nombre_doc) {
+        console.warn('Documento sin nombre_doc encontrado:', doc);
+        return null;
+      }
+      
+      // Tratar dosis vacía como dosis 1 (documento de dosis única)
+      if (doc.dosis === '' || doc.dosis === null || doc.dosis === undefined) {
+        doc.dosis = '1';
+      }
+      
+      return doc;
+    }).filter(doc => doc !== null); // Filtrar solo los documentos nulos (sin nombre_doc)
+    
+    console.log('Documentos válidos después del filtro:', documentosValidos.length);
+    
+    return documentosValidos;
   } catch (error) {
     console.error('Error al obtener tipos de documentos:', error);
     throw error;
