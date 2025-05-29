@@ -397,3 +397,43 @@ exports.findOrCreateUser = async (googleUserData) => {
     throw new Error(`Error procesando usuario ${googleUserData.email}: ${error.message}`);
   }
 };
+
+/**
+ * Obtiene todos los usuarios de la hoja USUARIOS
+ * @returns {Promise<Array>} - Lista de todos los usuarios
+ */
+exports.getAllUsers = async () => {
+  try {
+    const client = sheetsService.getClient();
+    const response = await client.spreadsheets.values.get({
+      spreadsheetId: sheetsService.spreadsheetId,
+      range: 'USUARIOS!A2:N', 
+    });
+
+    const rows = response.data.values || [];
+    const users = rows.map(row => {
+      const user = {};
+      const HEADERS = [ 
+        'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
+        'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
+        'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
+      ];
+      
+      HEADERS.forEach((header, index) => {
+        user[header] = row[index] || (header === 'primer_login' ? 'no' : '');
+      });
+
+      // Si el correo del usuario está en la columna admin, asignar rol admin
+      if (user.admin && user.admin.trim() === user.correo_usuario) {
+        user.rol = 'admin';
+      }
+
+      return user;
+    });
+
+    return users;
+  } catch (error) {
+    console.error('Error obteniendo todos los usuarios:', error);
+    throw error; 
+  }
+};

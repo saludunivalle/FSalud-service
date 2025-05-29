@@ -145,8 +145,33 @@ const getUserById = async (req, res) => {
   }
 };
 
+/**
+ * Obtiene todos los usuarios
+ * @param {Object} req - Objeto de solicitud Express
+ * @param {Object} res - Objeto de respuesta Express
+ */
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await usersService.getAllUsers();
+
+    res.status(200).json({
+      success: true,
+      data: users,
+      total: users.length
+    });
+  } catch (error) {
+    console.error('Error al obtener todos los usuarios:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener usuarios',
+      details: error.message
+    });
+  }
+};
+
 module.exports = {
   saveUser,
   getUserById,
-  updateFirstLogin
+  updateFirstLogin,
+  getAllUsers
 };

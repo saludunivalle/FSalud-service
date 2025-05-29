@@ -13,6 +13,11 @@ module.exports = async (req, res) => {
     const routePart1 = parts[0]; // For /:userId/first-login, this is userId. For /save, this is "save". For /id/:userId, this is "id".
     const routePart2 = parts.length > 1 ? parts[1] : null; // For /:userId/first-login, this is "first-login". For /id/:userId, this is userId.
 
+    // Obtener todos los usuarios (GET /api/users/all)
+    if (routePart1 === 'all' && !routePart2 && req.method === 'GET') {
+      return await someController.getAllUsers(req, res);
+    }
+
     // Actualizar primer inicio de sesión (POST /api/users/:userId/first-login)
     // routePart1 will be the userId, routePart2 will be "first-login"
     if (routePart2 === 'first-login' && routePart1 && req.method === 'POST') {
