@@ -3,7 +3,8 @@ const { generateUUID } = require('../utils/idGenerator');
 
 const HEADERS = [
   'id_usuarioDoc', 'id_persona', 'id_doc', 'nombre_doc', 'dosis', 'fecha_cargue', 
-  'fecha_expedicion', 'fecha_vencimiento', 'revision', 'fecha_revision', 'estado', 'ruta_archivo'
+  'fecha_expedicion', 'fecha_vencimiento', 'revision', 'fecha_revision', 'estado', 
+  'ruta_archivo', 'comentario'
 ];
 
 class DocumentosUsuariosRepository extends BaseRepository {
@@ -99,13 +100,15 @@ class DocumentosUsuariosRepository extends BaseRepository {
    * @param {string} idUsuarioDoc - ID del documento de usuario
    * @param {string} estado - Nuevo estado
    * @param {boolean} revisado - Si fue revisado
+   * @param {string} comentario - Comentario opcional de la revisión
    * @returns {Promise<Object|null>} - Documento actualizado o null
    */
-  async actualizarEstado(idUsuarioDoc, estado, revisado = true) {
+  async actualizarEstado(idUsuarioDoc, estado, revisado = true, comentario = '') {
     const updates = {
       estado,
       revision: revisado ? '1' : '0',
-      fecha_revision: revisado ? new Date().toISOString().split('T')[0] : ''
+      fecha_revision: revisado ? new Date().toISOString().split('T')[0] : '',
+      comentario: comentario || '' // Añadir comentario a la actualización
     };
     
     return this.update('id_usuarioDoc', idUsuarioDoc, updates);

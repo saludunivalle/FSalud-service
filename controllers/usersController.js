@@ -48,14 +48,19 @@ const saveUser = async (req, res) => {
 const updateFirstLogin = async (req, res) => {
   try {
     const { id } = req.params;
-    // Extraer los campos adicionales del req.body, añadiendo nombre_usuario y apellido_usuario
+    console.log('updateFirstLogin - ID recibido:', id);
+    console.log('updateFirstLogin - Datos recibidos en req.body:', req.body);
+    
+    // Extraer todos los campos del req.body, incluyendo sede
     const { 
       programa_academico, 
+      sede,                // Agregado el campo sede
       documento_usuario, 
       tipoDoc, 
       telefono,
       fecha_nac, 
       email,
+      correo_usuario,      // Agregado correo_usuario
       nombre_usuario,   
       apellido_usuario, 
       rol             
@@ -68,24 +73,40 @@ const updateFirstLogin = async (req, res) => {
       });
     }
 
-    // Validar datos (puedes añadir validación para los nuevos campos si es necesario)
-    if (!programa_academico || !documento_usuario || !tipoDoc || !telefono || !fecha_nac || !email) {
+    // Validar datos incluyendo sede
+    if (!programa_academico || !sede || !documento_usuario || !tipoDoc || !telefono || !fecha_nac || !email) {
       return res.status(400).json({
         success: false,
-        error: 'Todos los campos (programa, documento, tipoDoc, telefono, fecha_nac, email personal) son requeridos'
+        error: 'Todos los campos (programa, sede, documento, tipoDoc, telefono, fecha_nac, email personal) son requeridos'
       });
     }
 
-    const updatedUser = await usersService.updateUserFirstLogin(id, {
+    console.log('updateFirstLogin - Datos a enviar al servicio:', {
       programa_academico,
+      sede,
       documento_usuario,
       tipoDoc,
       telefono,
       fecha_nac,
       email,
-      nombre_usuario,    // Añadido
-      apellido_usuario,  // Añadido
-      rol                // Añadido
+      correo_usuario,
+      nombre_usuario,
+      apellido_usuario,
+      rol
+    });
+
+    const updatedUser = await usersService.updateUserFirstLogin(id, {
+      programa_academico,
+      sede,                // Agregado sede
+      documento_usuario,
+      tipoDoc,
+      telefono,
+      fecha_nac,
+      email,
+      correo_usuario,      // Agregado correo_usuario
+      nombre_usuario,    
+      apellido_usuario,  
+      rol                
     });
 
     res.status(200).json({

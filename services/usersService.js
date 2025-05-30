@@ -30,7 +30,7 @@ exports.findUserById = async (userId) => {
     const client = sheetsService.getClient();
     const response = await client.spreadsheets.values.get({
       spreadsheetId: sheetsService.spreadsheetId,
-      range: 'USUARIOS!A2:N', 
+      range: 'USUARIOS!A2:M', 
     });
 
     const rows = response.data.values || [];
@@ -41,8 +41,8 @@ exports.findUserById = async (userId) => {
     const user = {};
     const HEADERS = [ 
       'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
-      'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
-      'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
+      'programa_academico', 'sede','documento_usuario', 'tipoDoc', 'telefono', 
+      'fecha_nac', 'email', 'rol', 'primer_login'
     ];
     HEADERS.forEach((header, index) => {
       user[header] = userRow[index] || (header === 'primer_login' ? 'no' : '');
@@ -70,23 +70,22 @@ exports.updateUserFirstLogin = async (userId, data) => {
   try {
     console.log(`Actualizando primer inicio de sesión para usuario ${userId} con datos:`, data);
     
-    // Preparar datos para actualización con todos los campos relevantes
-    const updateData = {
-      // Asegurarse de que todos los campos necesarios estén presentes
-      programa_academico: data.programa_academico,
-      documento_usuario: data.documento_usuario,
-      tipoDoc: data.tipoDoc,
-      telefono: data.telefono,
-      fecha_nac: data.fecha_nac,
-      email: data.email,
-      correo_usuario: data.correo_usuario || data.email,
-      rol: data.rol || 'estudiante',
-      primer_login: 'si'  // Han completado el formulario, así que se establece en 'si'
-    };
-    
-    // Incluir campos de nombre si están proporcionados
-    if (data.nombre_usuario) updateData.nombre_usuario = data.nombre_usuario;
-    if (data.apellido_usuario) updateData.apellido_usuario = data.apellido_usuario;
+    // Preparar datos para actualización en el orden correcto de las columnas
+    const updateData = [
+      userId,                             // id_usuario
+      data.correo_usuario || data.email,  // correo_usuario
+      data.nombre_usuario,                // nombre_usuario
+      data.apellido_usuario,              // apellido_usuario
+      data.programa_academico,            // programa_academico
+      data.sede,                          // sede
+      data.documento_usuario,             // documento_usuario
+      data.tipoDoc,                       // tipoDoc
+      data.telefono,                      // telefono
+      data.fecha_nac,                     // fecha_nac
+      data.email,                         // email
+      data.rol || 'estudiante',           // rol
+      'si'                                // primer_login
+    ];
     
     console.log(`Datos finales de actualización para el usuario ${userId}:`, updateData);
     const updatedUser = await usersRepository.update('id_usuario', userId, updateData);
@@ -114,18 +113,14 @@ exports.isEmailAdmin = async (email) => {
     const client = sheetsService.getClient();
     const response = await client.spreadsheets.values.get({
       spreadsheetId: sheetsService.spreadsheetId,
-      range: 'USUARIOS!M2:M', // Columna admin (M)
+      range: 'ADMINISTRADORES!F2:F', // Columna correo_admin (F)
     });
 
-    console.log(`[isEmailAdmin] Respuesta de Google Sheets para columna admin:`, JSON.stringify(response.data, null, 2));
+    console.log(`[isEmailAdmin] Respuesta de Google Sheets para correos admin:`, JSON.stringify(response.data, null, 2));
     
     const adminEmails = response.data.values || [];
-    const adminEmailList = adminEmails.flat().filter(email => email && email.trim() !== '');
+    const isAdmin = adminEmails.some(row => row[0] && row[0].trim().toLowerCase() === email.toLowerCase());
     
-    console.log(`[isEmailAdmin] Lista de emails admin encontrados:`, adminEmailList);
-    console.log(`[isEmailAdmin] Buscando email: "${email}" en lista:`, adminEmailList);
-    
-    const isAdmin = adminEmailList.includes(email);
     console.log(`[isEmailAdmin] Email ${email} ${isAdmin ? 'SÍ' : 'NO'} está en la lista de admins`);
     
     return isAdmin;
@@ -157,30 +152,74 @@ exports.createUser = async (googleUserData) => {
     const isAdmin = await this.isEmailAdmin(googleUserData.email);
     console.log(`[usersService.createUser] Usuario ${googleUserData.email} ${isAdmin ? 'SÍ' : 'NO'} es admin`);
 
-    const newUser = {
-      id_usuario: String(googleUserData.googleId),
-      correo_usuario: googleUserData.email,
-      nombre_usuario: nombre,
-      apellido_usuario: apellido,
-      programa_academico: '', 
-      documento_usuario: '',
-      tipoDoc: '',
-      telefono: '',
-      observaciones: '',
-      fecha_nac: '',
-      email: '', 
-      rol: isAdmin ? 'admin' : 'estudiante',
-      admin: isAdmin ? googleUserData.email : '', // Si es admin, poner su email en la columna admin
-      primer_login: isAdmin ? 'si' : 'no' // Los admins no necesitan completar FirstLoginForm
-    };
+    if (isAdmin) {
+      // Si es admin, crear en la hoja ADMINISTRADORES
+      const client = sheetsService.getClient();
+      
+      // Primero buscar la fila donde está el correo_admin
+      const response = await client.spreadsheets.values.get({
+        spreadsheetId: sheetsService.spreadsheetId,
+        range: 'ADMINISTRADORES!A2:F',
+      });
 
-    console.log('[usersService.createUser] Objeto newUser construido para el repositorio:', JSON.stringify(newUser, null, 2));
+      const rows = response.data.values || [];
+      const adminRowIndex = rows.findIndex(row => row[5] && row[5].trim().toLowerCase() === googleUserData.email.toLowerCase());
+      
+      if (adminRowIndex === -1) {
+        throw new Error(`No se encontró el correo admin ${googleUserData.email} en la hoja ADMINISTRADORES`);
+      }
+
+      // Preparar los datos del admin
+      const adminData = [
+        String(googleUserData.googleId), // id_usuario
+        googleUserData.email,           // correo_usuario
+        nombre,                         // nombre_usuario
+        apellido,                       // apellido_usuario
+        'admin',                        // rol
+        googleUserData.email            // correo_admin (mantener el correo en esta columna)
+      ];
+
+      // Actualizar la fila existente
+      await client.spreadsheets.values.update({
+        spreadsheetId: sheetsService.spreadsheetId,
+        range: `ADMINISTRADORES!A${adminRowIndex + 2}:F${adminRowIndex + 2}`,
+        valueInputOption: 'RAW',
+        resource: { values: [adminData] }
+      });
+
+      return {
+        id_usuario: String(googleUserData.googleId),
+        correo_usuario: googleUserData.email,
+        nombre_usuario: nombre,
+        apellido_usuario: apellido,
+        rol: 'admin',
+        primer_login: 'si'
+      };
+    }
+
+    // Si no es admin, crear en la hoja USUARIOS
+    const newUser = [
+      String(googleUserData.googleId),    // A - id_usuario
+      googleUserData.email,               // B - correo_usuario
+      nombre,                             // C - nombre_usuario
+      apellido,                           // D - apellido_usuario
+      '',                                 // E - programa_academico
+      '',                                 // F - sede
+      '',                                 // G - documento_usuario
+      '',                                 // H - tipoDoc
+      '',                                 // I - telefono
+      '',                                 // J - fecha_nac
+      '',                                 // K - email
+      'estudiante',                       // L - rol
+      'no'                                // M - primer_login
+    ];
+
+    console.log('[usersService.createUser] Datos de usuario para crear:', newUser);
 
     const createdUser = await usersRepository.createUser(newUser);
     
     console.log('[usersService.createUser] Respuesta del repositorio usersRepository.createUser:', JSON.stringify(createdUser, null, 2));
     
-    // Verificar que el usuario fue creado correctamente
     if (!createdUser || !createdUser.id_usuario) {
       throw new Error('El usuario no fue creado correctamente en el repositorio');
     }
@@ -189,7 +228,6 @@ exports.createUser = async (googleUserData) => {
 
   } catch (error) {
     console.error('[usersService.createUser] Error detallado:', error.message, error.stack);
-    // Si el error tiene una respuesta de Google API, muéstrala
     if (error.response && error.response.data && error.response.data.error) {
         console.error('[usersService.createUser] Google API Error Details:', JSON.stringify(error.response.data.error, null, 2));
     }
@@ -211,24 +249,49 @@ exports.updateAdminUserData = async (userId, googleUserData) => {
     const nombre = nameParts[0] || '';
     const apellido = nameParts.slice(1).join(' ') || '';
     
-    const updateData = {
+    const client = sheetsService.getClient();
+    
+    // Primero buscar la fila del admin
+    const response = await client.spreadsheets.values.get({
+      spreadsheetId: sheetsService.spreadsheetId,
+      range: 'ADMINISTRADORES!A2:E',
+    });
+
+    const rows = response.data.values || [];
+    const adminRowIndex = rows.findIndex(row => row[0] === String(userId));
+    
+    if (adminRowIndex === -1) {
+      throw new Error(`Usuario admin con ID ${userId} no encontrado para actualizar`);
+    }
+
+    // Preparar los datos actualizados
+    const adminData = [
+      String(googleUserData.googleId), // id_usuario
+      googleUserData.email,           // correo_usuario
+      nombre,                         // nombre_usuario
+      apellido,                       // apellido_usuario
+      'admin'                         // rol
+    ];
+
+    // Actualizar la fila del admin
+    await client.spreadsheets.values.update({
+      spreadsheetId: sheetsService.spreadsheetId,
+      range: `ADMINISTRADORES!A${adminRowIndex + 2}:E${adminRowIndex + 2}`,
+      valueInputOption: 'RAW',
+      resource: { values: [adminData] }
+    });
+    
+    const updatedAdmin = {
       id_usuario: String(googleUserData.googleId),
       correo_usuario: googleUserData.email,
       nombre_usuario: nombre,
       apellido_usuario: apellido,
       rol: 'admin',
-      primer_login: 'si' // Los admins no necesitan completar FirstLoginForm
+      primer_login: 'si'
     };
     
-    console.log(`Datos de actualización para admin ${userId}:`, updateData);
-    const updatedUser = await usersRepository.update('id_usuario', userId, updateData);
-    
-    if (!updatedUser) {
-      throw new Error(`Usuario admin con ID ${userId} no encontrado para actualizar`);
-    }
-    
     console.log(`Datos de admin actualizados exitosamente para usuario ${userId}`);
-    return updatedUser;
+    return updatedAdmin;
   } catch (error) {
     console.error(`Error actualizando datos de admin: ${error.message}`);
     throw error;

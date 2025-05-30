@@ -232,15 +232,17 @@ exports.getDocumentDoses = async (req, res) => {
 };
 
 /**
- * Revisa un documento (cambio de estado)
- * @param {Object} req - Objeto de solicitud Express
- * @param {Object} res - Objeto de respuesta Express
+ * Revisa un documento (cambio de estado) y envía notificación
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<void>}
  */
 exports.revisarDocumento = async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, comentario } = req.body;
     
+    // Validar ID del documento
     if (!id) {
       return res.status(400).json({
         success: false,
@@ -248,29 +250,60 @@ exports.revisarDocumento = async (req, res) => {
       });
     }
     
+    // Validar estado
     if (!estado) {
       return res.status(400).json({
         success: false,
         error: 'Se requiere el campo estado'
       });
     }
+
+    // Validar estado válido
+    const estadosValidos = ['Rechazado', 'Cumplido', 'Expirado', 'No aplica'];
+    if (!estadosValidos.includes(estado)) {
+      return res.status(400).json({
+        success: false,
+        error: `Estado '${estado}' no válido. Estados válidos: ${estadosValidos.join(', ')}`
+      });
+    }
     
+    // Llamar al servicio que ahora incluye el envío de notificaciones
     const documentoActualizado = await documentsService.revisarDocumento(
       id,
       estado,
       comentario || ''
     );
     
+    // Preparar mensaje de respuesta
+    let mensaje = `Documento ${id} actualizado a estado: ${estado}`;
+    if (comentario) {
+      mensaje += ` con comentario`;
+    }
+    
     res.status(200).json({
       success: true,
-      message: `Documento ${id} actualizado a estado: ${estado}`,
-      data: documentoActualizado
+      message: mensaje,
+      data: documentoActualizado,
+      notification: 'Se ha enviado una notificación al usuario'
     });
   } catch (error) {
     console.error('Error al revisar documento:', error);
-    res.status(500).json({
+    
+    // Determinar el código de estado apropiado
+    let statusCode = 500;
+    let errorMessage = 'Error al revisar documento';
+    
+    if (error.message.includes('no encontrado')) {
+      statusCode = 404;
+      errorMessage = error.message;
+    } else if (error.message.includes('no válido')) {
+      statusCode = 400;
+      errorMessage = error.message;
+    }
+    
+    res.status(statusCode).json({
       success: false,
-      error: 'Error al revisar documento',
+      error: errorMessage,
       details: error.message
     });
   }

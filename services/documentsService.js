@@ -5,6 +5,7 @@ const driveRepository = require('../repository/driveRepository'); // Usar el rep
 const usersRepository = require('../repository/usersRepository');
 const { validateData } = require('../utils/validators');
 const { generateUUID } = require('../utils/idGenerator');
+const emailService = require('./emailService');
 
 /**
  * Obtiene todos los tipos de documentos
@@ -343,7 +344,7 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
 };
 
 /**
- * Revisa un documento (cambio de estado)
+ * Revisa un documento (cambio de estado) y envía notificación
  * @param {string} documentoId - ID del documento a revisar
  * @param {string} estado - Nuevo estado (Rechazado, Cumplido, etc.)
  * @param {string} comentario - Comentario opcional de la revisión
@@ -357,18 +358,53 @@ exports.revisarDocumento = async (documentoId, estado, comentario = '') => {
       throw new Error(`Estado '${estado}' no válido. Estados válidos: ${estadosValidos.join(', ')}`);
     }
     
-    // Obtener el documento
+    // Obtener el documento con información del usuario
     const documento = await documentosUsuariosRepository.findOneBy('id_usuarioDoc', documentoId);
     if (!documento) {
       throw new Error(`Documento con ID ${documentoId} no encontrado.`);
+    }
+    
+    // Obtener información del usuario propietario del documento
+    const usuario = await usersRepository.findOneBy('id_usuario', documento.id_persona);
+    if (!usuario) {
+      console.error(`Usuario con ID ${documento.id_persona} no encontrado para notificación`);
     }
     
     // Actualizar estado y campos de revisión
     const documentoActualizado = await documentosUsuariosRepository.actualizarEstado(
       documentoId,
       estado,
-      true // Marcado como revisado
+      true, // Marcado como revisado
+      comentario // Incluir comentario en la actualización
     );
+    
+    // Si tenemos información del usuario, enviar notificación por email
+    if (usuario && usuario.correo_usuario) {
+      // Ejecutar envío de email de forma asíncrona para no bloquear la respuesta
+      setImmediate(async () => {
+        try {
+          const nombreCompleto = `${usuario.nombre_usuario || ''} ${usuario.apellido_usuario || ''}`.trim() || 'Usuario';
+          
+          const resultado = await emailService.sendStatusChangeNotification(
+            usuario.correo_usuario,
+            nombreCompleto,
+            documento.nombre_doc || 'Documento',
+            estado,
+            new Date().toISOString(),
+            comentario
+          );
+          
+          if (resultado.success) {
+            console.log(`Notificación enviada exitosamente para documento ${documentoId}`);
+          } else {
+            console.error(`Fallo al enviar notificación para documento ${documentoId}:`, resultado.error);
+            // Aquí podrías implementar un sistema de cola para reintentos posteriores
+          }
+        } catch (error) {
+          console.error(`Error inesperado al enviar notificación:`, error);
+        }
+      });
+    }
     
     return documentoActualizado;
   } catch (error) {

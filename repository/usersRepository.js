@@ -9,14 +9,13 @@ const HEADERS = [
   'nombre_usuario', 
   'apellido_usuario',
   'programa_academico', 
+  'sede',
   'documento_usuario', 
   'tipoDoc', 
   'telefono', 
-  'observaciones', 
   'fecha_nac', 
   'email', 
   'rol', 
-  'admin', 
   'primer_login'
 ];
 
@@ -28,39 +27,73 @@ class UsersRepository extends BaseRepository {
   
   /**
    * Crea un nuevo usuario. Asume que userData ya incluye un id_usuario válido.
-   * @param {Object} userData - Datos del usuario (debe incluir id_usuario)
+   * @param {Array} userData - Array con los datos del usuario en el orden correcto
    * @returns {Promise<Object>} - Usuario creado
    */
   async createUser(userData) {
     try {
       // Validar que el ID viene del servicio
-      if (!userData.id_usuario) {
-        // Si no viene ID, es un error de lógica interna, no deberíamos generar uno aquí.
+      if (!userData[0]) {
         console.error('Error Crítico: createUser en Repository llamado sin id_usuario.');
         throw new Error('Falta id_usuario al intentar crear el registro en el repositorio.');
       }
       
-      // Asegurar que el ID sea un string (aunque el servicio ya debería hacerlo)
-      userData.id_usuario = String(userData.id_usuario);
+      // Asegurar que el ID sea un string
+      userData[0] = String(userData[0]);
       
       // Log para verificar el ID justo antes de pasarlo al BaseRepository
-      console.log('UsersRepository - Preparando para crear con ID:', userData.id_usuario);
+      console.log('UsersRepository - Preparando para crear con ID:', userData[0]);
       
-      // Asegurarnos que todos los campos definidos en HEADERS existen, aunque sea vacíos
-      const completeUserData = {};
-      HEADERS.forEach(header => {
-        completeUserData[header] = userData[header] !== undefined && userData[header] !== null 
-                                    ? String(userData[header]) // Asegurar que todo sea string
-                                    : ''; 
+      // Convertir el array a objeto para el BaseRepository
+      const userObject = {};
+      HEADERS.forEach((header, index) => {
+        userObject[header] = userData[index] !== undefined && userData[index] !== null 
+                            ? String(userData[index]) // Asegurar que todo sea string
+                            : ''; 
       });
 
       // Llamar al método create del BaseRepository
-      return await this.create(completeUserData);
+      return await this.create(userObject);
       
     } catch (error) {
       console.error('Error en UsersRepository.createUser:', error);
-      // Re-lanzar el error para que sea manejado por capas superiores
       throw error; 
+    }
+  }
+
+  /**
+   * Actualiza un usuario existente
+   * @param {string} field - Campo para buscar el usuario
+   * @param {string} value - Valor del campo
+   * @param {Array} updateData - Array con los datos actualizados en el orden correcto
+   * @returns {Promise<Object>} - Usuario actualizado
+   */
+  async update(field, value, updateData) {
+    try {
+      console.log('UsersRepository.update - Datos recibidos:', {
+        field,
+        value,
+        updateData
+      });
+
+      // Convertir el array a objeto para el BaseRepository
+      const updateObject = {};
+      HEADERS.forEach((header, index) => {
+        updateObject[header] = updateData[index] !== undefined && updateData[index] !== null 
+                            ? String(updateData[index]) // Asegurar que todo sea string
+                            : ''; 
+      });
+
+      console.log('UsersRepository.update - Objeto convertido:', updateObject);
+
+      // Llamar al método update del BaseRepository
+      const result = await super.update(field, value, updateObject);
+      
+      console.log('UsersRepository.update - Resultado:', result);
+      return result;
+    } catch (error) {
+      console.error('Error en UsersRepository.update:', error);
+      throw error;
     }
   }
 
@@ -70,7 +103,6 @@ class UsersRepository extends BaseRepository {
    * @returns {Promise<Object|null>} - Usuario encontrado o null
    */
   async findByEmail(email) {
-    // Asegúrate de que findOneBy esté implementado en BaseRepository o aquí
     return this.findOneBy('correo_usuario', email); 
   }
 }

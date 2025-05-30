@@ -2,9 +2,9 @@
 const sheetsServiceInstance = require('./sheetsService'); // Usamos la instancia exportada
 
 /**
- * Obtiene todos los programas académicos de la hoja "PROGRAMAS".
- * Asume que los programas están en la columna A, comenzando desde A2.
- * @returns {Promise<Array<{value: string, label: string}>>} - Lista de programas.
+ * Obtiene todos los programas académicos y sus sedes de la hoja "PROGRAMAS".
+ * Asume que los programas están en la columna A y las sedes en la columna C, comenzando desde A2.
+ * @returns {Promise<Array<{value: string, label: string, sede: string}>>} - Lista de programas con sus sedes.
  */
 exports.fetchAllPrograms = async () => {
   try {
@@ -15,8 +15,8 @@ exports.fetchAllPrograms = async () => {
       throw new Error('Google Sheets ID no está configurado en el backend.');
     }
 
-    const range = 'PROGRAMAS!A1:A'; // Columna A, incluye la fila de encabezado para verificar que sea "Programa Académico"
-    console.log(`[programsService] Fetching programs from range: ${range}`);
+    const range = 'PROGRAMAS!A1:C'; // Columnas A y C, incluye la fila de encabezado
+    console.log(`[programsService] Fetching programs and sedes from range: ${range}`);
 
     const response = await client.spreadsheets.values.get({
       spreadsheetId: spreadsheetId,
@@ -32,20 +32,20 @@ exports.fetchAllPrograms = async () => {
       return [];
     }
 
-    // Verificar el encabezado (primera fila)
-    const header = rows[0] && rows[0][0];
-    if (header !== 'Programa Académico') {
-      console.warn(`[programsService] Expected header "Programa Académico" but found "${header}"`);
+    // Verificar los encabezados (primera fila)
+    const headers = rows[0];
+    if (headers[0] !== 'Programa Académico' || headers[2] !== 'Sede') {
+      console.warn(`[programsService] Expected headers "Programa Académico" and "Sede" but found "${headers[0]}" and "${headers[2]}"`);
     }
 
     // Procesar las filas de datos (omitir la primera fila que es el encabezado)
     const programs = rows
       .slice(1) // Omitir el encabezado
-      .map(row => row[0]) // Tomar el primer elemento de cada fila (columna A)
-      .filter(programName => programName && programName.trim() !== '') // Filtrar nombres vacíos o solo espacios
-      .map(programName => ({
-        value: programName.trim(), // Usar el nombre del programa como valor
-        label: programName.trim()  // y como etiqueta
+      .filter(row => row[0] && row[0].trim() !== '') // Filtrar filas sin programa
+      .map(row => ({
+        value: row[0].trim(),
+        label: row[0].trim(),
+        sede: row[2] ? row[2].trim() : '' // Sede del programa
       }));
     
     console.log(`[programsService] Programs mapped: ${programs.length}`);
@@ -56,7 +56,7 @@ exports.fetchAllPrograms = async () => {
     if (error.response && error.response.data) {
       console.error('[programsService] Google API Error Details:', JSON.stringify(error.response.data.error, null, 2));
     }
-    // Re-lanzar el error para que el controlador lo maneje
+    // Relanzar el error para que el controlador lo maneje
     throw new Error(`Error al obtener programas académicos: ${error.message}`);
   }
 };

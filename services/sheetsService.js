@@ -32,17 +32,41 @@ class SheetsService {
     try {
       console.log(`Finding user by email: ${email}`);
       const client = this.getClient();
+      
+      // Primero verificar si es administrador
+      const adminResponse = await client.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'ADMINISTRADORES!A2:E', // Get all admin columns
+      });
+
+      const adminRows = adminResponse.data.values || [];
+      const adminRow = adminRows.find(row => row[1] && row[1].trim().toLowerCase() === email.toLowerCase());
+      
+      if (adminRow) {
+        // Si es admin, devolver objeto de admin
+        const admin = {
+          id_usuario: adminRow[0] || '',
+          correo_usuario: adminRow[1] || '',
+          nombre_usuario: adminRow[2] || '',
+          apellido_usuario: adminRow[3] || '',
+          rol: 'admin',
+          primer_login: 'si'
+        };
+        console.log(`Admin found by email ${email}:`, admin);
+        return admin;
+      }
+
+      // Si no es admin, buscar en usuarios normales
       const response = await client.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'USUARIOS!A2:N', // Get all columns including primer_login
+        range: 'USUARIOS!A2:N',
       });
 
       const rows = response.data.values || [];
-      const userRow = rows.find(row => row[1] === email); // Email is in column B
+      const userRow = rows.find(row => row[1] && row[1].trim().toLowerCase() === email.toLowerCase());
       
       if (!userRow) return null;
 
-      // Map the full row to user object
       const HEADERS = [ 
         'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
         'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
@@ -54,10 +78,8 @@ class SheetsService {
         user[header] = userRow[index] || (header === 'primer_login' ? 'no' : '');
       });
       
-      // Si el correo del usuario está en la columna admin, asignar rol admin
-      if (user.admin && user.admin.trim() === user.correo_usuario) {
-        user.rol = 'admin';
-      }
+      // Asegurar que el rol sea estudiante
+      user.rol = 'estudiante';
       
       console.log(`User found by email ${email}:`, user);
       return user;
