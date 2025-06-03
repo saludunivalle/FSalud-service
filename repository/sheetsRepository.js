@@ -45,7 +45,7 @@ exports.getUsers = async () => {
     const sheets = await getSheets();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEETS_ID,
-      range: 'USUARIOS!A2:L',
+      range: 'USUARIOS!A2:M',
     });
     
     const rows = response.data.values || [];
@@ -54,14 +54,15 @@ exports.getUsers = async () => {
       correo_usuario: row[1] || '',
       nombre_usuario: row[2] || '',
       apellido_usuario: row[3] || '',
-      documento_usuario: row[4] || '',
-      tipoDoc: row[5] || '',
-      telefono: row[6] || '',
-      direccion: row[7] || '',
-      observaciones: row[8] || '',
+      programa_academico: row[4] || '',
+      sede: row[5] || '',
+      documento_usuario: row[6] || '',
+      tipoDoc: row[7] || '',
+      telefono: row[8] || '',
       fecha_nac: row[9] || '',
       email: row[10] || '',
-      rol: row[11] || 'estudiante'
+      rol: row[11] || 'estudiante',
+      primer_login: row[12] || 'no'
     }));
   } catch (error) {
     console.error('Error obteniendo usuarios:', error);
@@ -85,21 +86,22 @@ exports.addUser = async (user) => {
         user.correo_usuario,
         user.nombre_usuario,
         user.apellido_usuario,
+        user.programa_academico || '',
+        user.sede || '',
         user.documento_usuario || '',
         user.tipoDoc || '',
         user.telefono || '',
-        user.direccion || '',
-        user.observaciones || '',
         user.fecha_nac || '',
         user.email || '',
-        user.rol || 'estudiante'
+        user.rol || 'estudiante',
+        user.primer_login || 'no'
       ]
     ];
     
     // Insertar en la hoja de cálculo
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEETS_ID,
-      range: 'USUARIOS!A2:L',
+      range: 'USUARIOS!A2:M',
       valueInputOption: 'RAW',
       resource: { values }
     });

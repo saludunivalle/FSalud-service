@@ -28,32 +28,60 @@ exports.findUserByEmail = async (email) => {
 exports.findUserById = async (userId) => {
   try {
     const client = sheetsService.getClient();
-    const response = await client.spreadsheets.values.get({
+    
+    // Primero buscar en la hoja USUARIOS
+    const usersResponse = await client.spreadsheets.values.get({
       spreadsheetId: sheetsService.spreadsheetId,
       range: 'USUARIOS!A2:M', 
     });
 
-    const rows = response.data.values || [];
-    const userRow = rows.find(row => row[0] === String(userId)); 
+    const usersRows = usersResponse.data.values || [];
+    const userRow = usersRows.find(row => row[0] === String(userId)); 
     
-    if (!userRow) return null;
+    if (userRow) {
+      const user = {};
+      const HEADERS = [ 
+        'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
+        'programa_academico', 'sede','documento_usuario', 'tipoDoc', 'telefono', 
+        'fecha_nac', 'email', 'rol', 'primer_login'
+      ];
+      HEADERS.forEach((header, index) => {
+        user[header] = userRow[index] || (header === 'primer_login' ? 'no' : '');
+      });
 
-    const user = {};
-    const HEADERS = [ 
-      'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
-      'programa_academico', 'sede','documento_usuario', 'tipoDoc', 'telefono', 
-      'fecha_nac', 'email', 'rol', 'primer_login'
-    ];
-    HEADERS.forEach((header, index) => {
-      user[header] = userRow[index] || (header === 'primer_login' ? 'no' : '');
-    });
-
-    // Si el correo del usuario está en la columna admin, asignar rol admin
-    if (user.admin && user.admin.trim() === user.correo_usuario) {
-      user.rol = 'admin';
+      return user;
     }
 
-    return user;
+    // Si no se encuentra en USUARIOS, buscar en ADMINISTRADORES
+    const adminsResponse = await client.spreadsheets.values.get({
+      spreadsheetId: sheetsService.spreadsheetId,
+      range: 'ADMINISTRADORES!A2:F', 
+    });
+
+    const adminsRows = adminsResponse.data.values || [];
+    const adminRow = adminsRows.find(row => row[0] === String(userId)); 
+    
+    if (adminRow) {
+      const admin = {
+        id_usuario: adminRow[0] || '',
+        correo_usuario: adminRow[1] || '',
+        nombre_usuario: adminRow[2] || '',
+        apellido_usuario: adminRow[3] || '',
+        programa_academico: '',
+        sede: '',
+        documento_usuario: '',
+        tipoDoc: '',
+        telefono: '',
+        fecha_nac: '',
+        email: '',
+        rol: 'admin',
+        primer_login: 'si'
+      };
+
+      return admin;
+    }
+
+    return null;
   } catch (error) {
     console.error('Error buscando usuario por ID:', error);
     throw error; 
@@ -309,7 +337,7 @@ exports.findAdminRowByEmail = async (email) => {
     const client = sheetsService.getClient();
     const response = await client.spreadsheets.values.get({
       spreadsheetId: sheetsService.spreadsheetId,
-      range: 'USUARIOS!A2:N', // Todas las columnas desde fila 2
+      range: 'USUARIOS!A2:M', // Todas las columnas desde fila 2
     });
 
     const rows = response.data.values || [];
@@ -354,21 +382,20 @@ exports.fillAdminRow = async (rowIndex, googleUserData) => {
       nombre,                         // nombre_usuario
       apellido,                       // apellido_usuario
       '',                            // programa_academico
+      '',                            // sede
       '',                            // documento_usuario
       '',                            // tipoDoc
       '',                            // telefono
-      '',                            // observaciones
       '',                            // fecha_nac
       '',                            // email
       'admin',                       // rol
-      googleUserData.email,          // admin (mantener el email)
       'si'                           // primer_login
     ];
     
     // Actualizar la fila específica
     const response = await client.spreadsheets.values.update({
       spreadsheetId: sheetsService.spreadsheetId,
-      range: `USUARIOS!A${rowIndex}:N${rowIndex}`,
+      range: `USUARIOS!A${rowIndex}:M${rowIndex}`,
       valueInputOption: 'RAW',
       resource: { values: [values] }
     });
@@ -378,8 +405,8 @@ exports.fillAdminRow = async (rowIndex, googleUserData) => {
     // Construir el objeto de usuario para retornar
     const HEADERS = [ 
       'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
-      'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
-      'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
+      'programa_academico', 'sede', 'documento_usuario', 'tipoDoc', 'telefono', 
+      'fecha_nac', 'email', 'rol', 'primer_login'
     ];
     
     const user = {};
@@ -462,41 +489,40 @@ exports.findOrCreateUser = async (googleUserData) => {
 };
 
 /**
- * Obtiene todos los usuarios de la hoja USUARIOS
- * @returns {Promise<Array>} - Lista de todos los usuarios
+ * Obtiene todos los usuarios de la hoja USUARIOS únicamente
+ * @returns {Promise<Array>} - Lista de usuarios (sin administradores)
  */
 exports.getAllUsers = async () => {
   try {
     const client = sheetsService.getClient();
-    const response = await client.spreadsheets.values.get({
+    
+    // Obtener usuarios de la hoja USUARIOS únicamente
+    const usersResponse = await client.spreadsheets.values.get({
       spreadsheetId: sheetsService.spreadsheetId,
-      range: 'USUARIOS!A2:N', 
+      range: 'USUARIOS!A2:M', 
     });
 
-    const rows = response.data.values || [];
-    const users = rows.map(row => {
+    const usersRows = usersResponse.data.values || [];
+    const users = usersRows.map(row => {
       const user = {};
       const HEADERS = [ 
         'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
-        'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
-        'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
+        'programa_academico', 'sede', 'documento_usuario', 'tipoDoc', 'telefono', 
+        'fecha_nac', 'email', 'rol', 'primer_login'
       ];
       
       HEADERS.forEach((header, index) => {
         user[header] = row[index] || (header === 'primer_login' ? 'no' : '');
       });
 
-      // Si el correo del usuario está en la columna admin, asignar rol admin
-      if (user.admin && user.admin.trim() === user.correo_usuario) {
-        user.rol = 'admin';
-      }
-
       return user;
-    });
+    }).filter(user => user.id_usuario && user.id_usuario.trim() !== ''); // Filtrar filas vacías
 
+    console.log(`[getAllUsers] Encontrados ${users.length} usuarios (solo de hoja USUARIOS)`);
+    
     return users;
   } catch (error) {
-    console.error('Error obteniendo todos los usuarios:', error);
+    console.error('Error obteniendo usuarios:', error);
     throw error; 
   }
 };

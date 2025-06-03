@@ -59,7 +59,7 @@ class SheetsService {
       // Si no es admin, buscar en usuarios normales
       const response = await client.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'USUARIOS!A2:N',
+        range: 'USUARIOS!A2:M',
       });
 
       const rows = response.data.values || [];
@@ -69,8 +69,8 @@ class SheetsService {
 
       const HEADERS = [ 
         'id_usuario', 'correo_usuario', 'nombre_usuario', 'apellido_usuario',
-        'programa_academico', 'documento_usuario', 'tipoDoc', 'telefono', 
-        'observaciones', 'fecha_nac', 'email', 'rol', 'admin', 'primer_login'
+        'programa_academico', 'sede', 'documento_usuario', 'tipoDoc', 'telefono', 
+        'fecha_nac', 'email', 'rol', 'primer_login'
       ];
       
       const user = {};
@@ -113,23 +113,24 @@ class SheetsService {
       
       // Si el usuario no existe, guardar
       if (!existingUsers.includes(userId)) {
-        const userRange = 'USUARIOS!A2:L2';
+        const userRange = 'USUARIOS!A2:M2';
         
         // Preparar los datos del usuario con todos los campos
-        // (asumiendo que la hoja tiene 12 columnas A-L como se definió en las estructuras)
+        // Estructura: id_usuario, correo_usuario, nombre_usuario, apellido_usuario, programa_academico, sede, documento_usuario, tipoDoc, telefono, fecha_nac, email, rol, primer_login
         const userData = [
           userId,              // id_usuario
           email,               // correo_usuario
           name.split(' ')[0],  // nombre_usuario (primer nombre)
           name.split(' ').slice(1).join(' '), // apellido_usuario (resto del nombre)
+          '',                  // programa_academico
+          '',                  // sede
           '',                  // documento_usuario
           '',                  // tipoDoc
           '',                  // telefono
-          '',                  // direccion
-          '',                  // observaciones
           '',                  // fecha_nac
           '',                  // email (alternativo)
-          'estudiante'         // rol
+          'estudiante',        // rol
+          'no'                 // primer_login
         ];
 
         await client.spreadsheets.values.append({

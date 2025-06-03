@@ -7,14 +7,15 @@ class Usuario {
     this.correo_usuario = data.correo_usuario || '';
     this.nombre_usuario = data.nombre_usuario || '';
     this.apellido_usuario = data.apellido_usuario || '';
+    this.programa_academico = data.programa_academico || '';
+    this.sede = data.sede || '';
     this.documento_usuario = data.documento_usuario || '';
     this.tipoDoc = data.tipoDoc || '';
     this.telefono = data.telefono || '';
-    this.direccion = data.direccion || '';
-    this.observaciones = data.observaciones || '';
     this.fecha_nac = data.fecha_nac || '';
     this.email = data.email || '';
     this.rol = data.rol || 'estudiante';
+    this.primer_login = data.primer_login || 'no';
   }
   
   /**
@@ -64,14 +65,15 @@ class Usuario {
       correo_usuario: this.correo_usuario,
       nombre_usuario: this.nombre_usuario,
       apellido_usuario: this.apellido_usuario,
+      programa_academico: this.programa_academico,
+      sede: this.sede,
       documento_usuario: this.documento_usuario,
       tipoDoc: this.tipoDoc,
       telefono: this.telefono,
-      direccion: this.direccion,
-      observaciones: this.observaciones,
       fecha_nac: this.fecha_nac,
       email: this.email,
-      rol: this.rol
+      rol: this.rol,
+      primer_login: this.primer_login
     };
   }
 }
