@@ -10,7 +10,7 @@ module.exports = async (req, res) => {
         cors: {
           allowedOrigins: process.env.CORS_ALLOWED_ORIGINS 
             ? process.env.CORS_ALLOWED_ORIGINS.split(',') 
-            : ['http://localhost:3000', 'https://fsalud-saludunivalles-projects.vercel.app'],
+            : ['http://localhost:3000', 'https://documentosfsalud.vercel.app'],
         },
         services: {
           googleSheets: !!process.env.GOOGLE_SHEETS_ID,

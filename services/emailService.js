@@ -132,7 +132,7 @@ class EmailService {
               <p style="margin: 0 0 15px 0; font-size: 16px; color: #333333;">
                 ${actionMessages[newStatus] || 'Por favor, ingresa al sistema para más información.'}
               </p>
-              <a href="${process.env.FRONTEND_URL || 'https://fsalud-saludunivalles-projects.vercel.app'}/dashboard" 
+              <a href="${process.env.FRONTEND_URL || 'https://documentosfsalud.vercel.app'}/dashboard" 
                  style="display: inline-block; background-color: #B22222; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 6px; font-weight: 600; font-size: 14px;">
                 Ingresar al Sistema
               </a>
@@ -264,7 +264,7 @@ Fecha de revisión: ${formattedDate}
 ${comments ? `\nComentarios del revisor: ${comments}` : ''}
 
 ${['Rechazado', 'Vencido', 'Expirado'].includes(newStatus) ? 
-  'Por favor, ingresa al sistema para actualizar tu documento: ' + (process.env.FRONTEND_URL || 'https://fsalud-saludunivalles-projects.vercel.app') + '/dashboard' : 
+  'Por favor, ingresa al sistema para actualizar tu documento: ' + (process.env.FRONTEND_URL || 'https://documentosfsalud.vercel.app') + '/dashboard' : 
   'No se requiere ninguna acción adicional.'}
 
 Atentamente,

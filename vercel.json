@@ -21,6 +21,6 @@
     }
   ],
   "env": {
-    "CORS_ALLOWED_ORIGINS": "http://localhost:3000,https://fsalud-saludunivalles-projects.vercel.app"
+    "CORS_ALLOWED_ORIGINS": "http://localhost:3000,https://documentosfsalud.vercel.app,https://fsalud-saludunivalles-projects.vercel.app"
   }
 }
