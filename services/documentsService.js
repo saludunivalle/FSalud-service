@@ -353,10 +353,19 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
 exports.revisarDocumento = async (documentoId, estado, comentario = '') => {
   try {
     // Validar estado
-    const estadosValidos = ['Rechazado', 'Cumplido', 'Expirado', 'No aplica'];
+    const estadosValidos = ['Aprobado', 'Rechazado', 'Vencido', 'Pendiente', 'Sin cargar'];
     if (!estadosValidos.includes(estado)) {
       throw new Error(`Estado '${estado}' no válido. Estados válidos: ${estadosValidos.join(', ')}`);
     }
+    
+    // Mapear estados del frontend a estados del backend
+    const estadoBackend = {
+      'Aprobado': 'Cumplido',
+      'Rechazado': 'Rechazado',
+      'Vencido': 'Expirado',
+      'Pendiente': 'Pendiente',
+      'Sin cargar': 'Sin cargar'
+    }[estado] || estado;
     
     // Obtener el documento con información del usuario
     const documento = await documentosUsuariosRepository.findOneBy('id_usuarioDoc', documentoId);
@@ -373,7 +382,7 @@ exports.revisarDocumento = async (documentoId, estado, comentario = '') => {
     // Actualizar estado y campos de revisión
     const documentoActualizado = await documentosUsuariosRepository.actualizarEstado(
       documentoId,
-      estado,
+      estadoBackend,
       true, // Marcado como revisado
       comentario // Incluir comentario en la actualización
     );
@@ -389,7 +398,7 @@ exports.revisarDocumento = async (documentoId, estado, comentario = '') => {
             usuario.correo_usuario,
             nombreCompleto,
             documento.nombre_doc || 'Documento',
-            estado,
+            estadoBackend,
             new Date().toISOString(),
             comentario
           );
@@ -397,18 +406,17 @@ exports.revisarDocumento = async (documentoId, estado, comentario = '') => {
           if (resultado.success) {
             console.log(`Notificación enviada exitosamente para documento ${documentoId}`);
           } else {
-            console.error(`Fallo al enviar notificación para documento ${documentoId}:`, resultado.error);
-            // Aquí podrías implementar un sistema de cola para reintentos posteriores
+            console.error(`Error enviando notificación para documento ${documentoId}:`, resultado.error);
           }
-        } catch (error) {
-          console.error(`Error inesperado al enviar notificación:`, error);
+        } catch (emailError) {
+          console.error(`Error en envío de notificación para documento ${documentoId}:`, emailError);
         }
       });
     }
     
     return documentoActualizado;
   } catch (error) {
-    console.error(`Error al revisar documento ${documentoId}:`, error);
+    console.error(`Error revisando documento ${documentoId}:`, error);
     throw error;
   }
 };
