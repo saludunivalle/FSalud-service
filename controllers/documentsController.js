@@ -259,7 +259,7 @@ exports.revisarDocumento = async (req, res) => {
     }
 
     // Validar estado válido
-    const estadosValidos = ['Rechazado', 'Cumplido', 'Expirado', 'No aplica'];
+    const estadosValidos = ['Rechazado', 'Aprobado', 'Vencido', 'Pendiente'];
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({
         success: false,

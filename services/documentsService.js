@@ -360,9 +360,9 @@ exports.revisarDocumento = async (documentoId, estado, comentario = '') => {
     
     // Mapear estados del frontend a estados del backend
     const estadoBackend = {
-      'Aprobado': 'Cumplido',
+      'Aprobado': 'Aprobado',
       'Rechazado': 'Rechazado',
-      'Vencido': 'Expirado',
+      'Vencido': 'Vencido',
       'Pendiente': 'Pendiente',
       'Sin cargar': 'Sin cargar'
     }[estado] || estado;
@@ -441,7 +441,7 @@ exports.actualizarEstadosVencidos = async () => {
       }
       
       // Si está en estado Cumplido, comprobar vencimiento
-      if (docUsuario.estado === 'Cumplido') {
+      if (docUsuario.estado === 'Aprobado') {
         const tipoDocumento = tiposDocumentos.find(
           tipo => tipo.id_tipoDoc === docUsuario.id_doc
         );
@@ -495,9 +495,9 @@ exports.getEstadisticas = async () => {
       porEstado: {
         'Sin revisar': 0,
         'Rechazado': 0,
-        'Cumplido': 0,
-        'Expirado': 0,
-        'No aplica': 0,
+        'Aprobado': 0,
+        'Vencido': 0,
+        'Pendiente': 0,
       }
     };
 
