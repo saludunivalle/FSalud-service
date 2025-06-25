@@ -137,7 +137,7 @@ exports.subirDocumento = async (req, res) => {
     }
 
     // Extraer datos del cuerpo (después de que Multer procese)
-    const { userId, documentType, expeditionDate, expirationDate, userName, userEmail, numeroDosis } = req.body;
+    const { userId, documentType, expeditionDate, expirationDate, userName, userEmail, numeroDosis, uploadedByAdmin } = req.body;
 
     // --- ADDED Logging ---
     console.log('Extracted userId:', userId);
@@ -172,16 +172,21 @@ exports.subirDocumento = async (req, res) => {
           expeditionDate,
           expirationDate, // Puede ser undefined
           userName,
-          userEmail
+          userEmail,
+          uploadedByAdmin: uploadedByAdmin === 'true' // Convertir string a boolean
       },
       numeroDosis ? parseInt(numeroDosis) : null // Número de dosis específica
     );
 
     // Responder con éxito
+    const isAdminUpload = uploadedByAdmin === 'true';
     res.status(200).json({
       success: true,
-      message: 'Documento subido y registrado correctamente.',
-      data: documento // Devolver la información del documento creado/actualizado
+      message: isAdminUpload 
+        ? 'Documento cargado exitosamente por administrador.' 
+        : 'Documento subido y registrado correctamente.',
+      data: documento, // Devolver la información del documento creado/actualizado
+      uploadedByAdmin: isAdminUpload
     });
 
   } catch (error) {

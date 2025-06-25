@@ -209,12 +209,13 @@ exports.getDocumentDoses = async (docId) => {
  * @param {Buffer} fileBuffer - Buffer del archivo
  * @param {string} fileName - Nombre original del archivo
  * @param {string} mimeType - Tipo MIME del archivo
- * @param {object} metadata - Metadatos adicionales { expeditionDate, expirationDate?, userName?, userEmail? }
+ * @param {object} metadata - Metadatos adicionales { expeditionDate, expirationDate?, userName?, userEmail?, uploadedByAdmin? }
  * @returns {Promise<Object>} - Información del documento subido/actualizado
  */
 exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeType, metadata, numeroDosis = null) => {
   try {
-    console.log(`Iniciando subida para User: ${userId}, DocType: ${tipoDocId}, File: ${fileName}`);
+    const isAdminUpload = metadata?.uploadedByAdmin === true;
+    console.log(`Iniciando subida para User: ${userId}, DocType: ${tipoDocId}, File: ${fileName}${isAdminUpload ? ' [CARGADO POR ADMIN]' : ''}`);
     // Validar tipo de archivo (ya se hace en middleware, pero doble check no hace daño)
     const tiposPermitidos = [
       'application/pdf', 'image/jpeg', 'image/png', 'image/jpg',
