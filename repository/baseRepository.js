@@ -7,6 +7,27 @@ require('dotenv').config();
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 
 /**
+ * Utility function para hacer retry con backoff exponencial
+ * @param {Function} fn - Función a ejecutar
+ * @param {number} retries - Número de reintentos
+ * @param {number} delay - Delay inicial en ms
+ * @returns {Promise} - Resultado de la función
+ */
+const retryWithBackoff = async (fn, retries = 3, delay = 1000) => {
+  try {
+    return await fn();
+  } catch (error) {
+    // Si es un error de rate limiting (429) y aún tenemos reintentos
+    if ((error.status === 429 || error.code === 429) && retries > 0) {
+      console.log(`Rate limit alcanzado, esperando ${delay}ms antes de reintentar. Reintentos restantes: ${retries}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryWithBackoff(fn, retries - 1, delay * 2); // Duplicar el delay
+    }
+    throw error;
+  }
+};
+
+/**
  * Obtiene el cliente autenticado de Google Sheets
  * @returns {Object} Cliente de Google Sheets
  */
@@ -78,23 +99,25 @@ class BaseRepository {
   }
 
   /**
-   * Obtiene todos los registros
+   * Obtiene todos los registros con retry automático
    * @returns {Promise<Array>} - Array de objetos
    */
   async getAll() {
-    try {
-      const sheets = getClient();
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: this.range,
-      });
-      
-      const rows = response.data.values || [];
-      return rows.map(row => this.mapRowToObject(row));
-    } catch (error) {
-      console.error(`Error obteniendo datos de ${this.sheetName}:`, error);
-      throw error;
-    }
+    return retryWithBackoff(async () => {
+      try {
+        const sheets = getClient();
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: this.range,
+        });
+        
+        const rows = response.data.values || [];
+        return rows.map(row => this.mapRowToObject(row));
+      } catch (error) {
+        console.error(`Error obteniendo datos de ${this.sheetName}:`, error);
+        throw error;
+      }
+    });
   }
 
   /**
@@ -130,91 +153,95 @@ class BaseRepository {
   }
 
   /**
-   * Crea un nuevo registro
+   * Crea un nuevo registro con retry automático
    * @param {Object} data - Datos a insertar
    * @returns {Promise<Object>} - Objeto creado
    */
   async create(data) {
-    try {
-      console.log(`[BaseRepository.create] Intentando crear registro en hoja: ${this.sheetName}. Datos recibidos:`, JSON.stringify(data, null, 2));
-      const sheets = getClient();
-      
-      // Asegurar que todos los headers tengan un valor, aunque sea vacío
-      const values = [this.headers.map(header => data[header] === undefined ? '' : data[header])];
-      console.log(`[BaseRepository.create] Valores preparados para Google Sheets API (hoja ${this.sheetName}):`, JSON.stringify(values, null, 2));
+    return retryWithBackoff(async () => {
+      try {
+        console.log(`[BaseRepository.create] Intentando crear registro en hoja: ${this.sheetName}. Datos recibidos:`, JSON.stringify(data, null, 2));
+        const sheets = getClient();
+        
+        // Asegurar que todos los headers tengan un valor, aunque sea vacío
+        const values = [this.headers.map(header => data[header] === undefined ? '' : data[header])];
+        console.log(`[BaseRepository.create] Valores preparados para Google Sheets API (hoja ${this.sheetName}):`, JSON.stringify(values, null, 2));
 
-      const response = await sheets.spreadsheets.values.append({
-        spreadsheetId: spreadsheetId,
-        range: `${this.sheetName}!A1`, // Apendiza después de la última fila con datos
-        valueInputOption: 'USER_ENTERED',
-        insertDataOption: 'INSERT_ROWS', // Asegura que se inserte una nueva fila
-        resource: { values },
-      });
+        const response = await sheets.spreadsheets.values.append({
+          spreadsheetId: spreadsheetId,
+          range: `${this.sheetName}!A1`, // Apendiza después de la última fila con datos
+          valueInputOption: 'USER_ENTERED',
+          insertDataOption: 'INSERT_ROWS', // Asegura que se inserte una nueva fila
+          resource: { values },
+        });
 
-      console.log(`[BaseRepository.create] Respuesta de Google Sheets API (append para ${this.sheetName}):`, JSON.stringify(response.data, null, 2));
+        console.log(`[BaseRepository.create] Respuesta de Google Sheets API (append para ${this.sheetName}):`, JSON.stringify(response.data, null, 2));
 
-      // Validar que response.data.updates.updatedData.values exista y tenga contenido
-      if (response.data && response.data.updates && response.data.updates.updatedData && response.data.updates.updatedData.values && response.data.updates.updatedData.values.length > 0) {
-        const appendedRow = response.data.updates.updatedData.values[0];
-        const result = this.mapRowToObject(appendedRow);
-        console.log(`[BaseRepository.create] Registro mapeado después de la creación en ${this.sheetName}:`, JSON.stringify(result, null, 2));
-        return result;
-      } else {
-        console.warn(`[BaseRepository.create] La respuesta de Google Sheets API para append en ${this.sheetName} no contenía los datos esperados. Respuesta completa:`, JSON.stringify(response.data, null, 2));
-        // Devolver los datos originales o un objeto indicando el problema, en lugar de fallar si mapRowToObject no puede procesar.
-        // Opcionalmente, podrías intentar leer la última fila para confirmar.
-        return data; // O manejar de otra forma
+        // Validar que response.data.updates.updatedData.values exista y tenga contenido
+        if (response.data && response.data.updates && response.data.updates.updatedData && response.data.updates.updatedData.values && response.data.updates.updatedData.values.length > 0) {
+          const appendedRow = response.data.updates.updatedData.values[0];
+          const result = this.mapRowToObject(appendedRow);
+          console.log(`[BaseRepository.create] Registro mapeado después de la creación en ${this.sheetName}:`, JSON.stringify(result, null, 2));
+          return result;
+        } else {
+          console.warn(`[BaseRepository.create] La respuesta de Google Sheets API para append en ${this.sheetName} no contenía los datos esperados. Respuesta completa:`, JSON.stringify(response.data, null, 2));
+          // Devolver los datos originales o un objeto indicando el problema, en lugar de fallar si mapRowToObject no puede procesar.
+          // Opcionalmente, podrías intentar leer la última fila para confirmar.
+          return data; // O manejar de otra forma
+        }
+
+      } catch (error) {
+        console.error(`[BaseRepository.create] Error creando registro en ${this.sheetName}:`, error.message, error.stack);
+        if (error.response && error.response.data && error.response.data.error) {
+          console.error('[BaseRepository.create] Google API Error Details:', JSON.stringify(error.response.data.error, null, 2));
+        }
+        console.error(`[BaseRepository.create] Datos que se intentaban escribir en ${this.sheetName}:`, JSON.stringify(data, null, 2));
+        throw new Error(`No se pudo crear el registro en ${this.sheetName}. Detalles: ${error.message}`);
       }
-
-    } catch (error) {
-      console.error(`[BaseRepository.create] Error creando registro en ${this.sheetName}:`, error.message, error.stack);
-      if (error.response && error.response.data && error.response.data.error) {
-        console.error('[BaseRepository.create] Google API Error Details:', JSON.stringify(error.response.data.error, null, 2));
-      }
-      console.error(`[BaseRepository.create] Datos que se intentaban escribir en ${this.sheetName}:`, JSON.stringify(data, null, 2));
-      throw new Error(`No se pudo crear el registro en ${this.sheetName}. Detalles: ${error.message}`);
-    }
+    });
   }
 
   /**
-   * Actualiza un registro existente
+   * Actualiza un registro existente con retry automático
    * @param {string} idField - Campo identificador
    * @param {any} idValue - Valor del identificador
    * @param {Object} data - Datos actualizados
    * @returns {Promise<Object|null>} - Objeto actualizado o null si no existe
    */
   async update(idField, idValue, data) {
-    try {
-      const sheets = getClient();
-      const all = await this.getAll();
-      
-      // Encontrar el índice del registro a actualizar
-      const rowIndex = all.findIndex(item => item[idField] === idValue);
-      
-      if (rowIndex === -1) {
-        return null; // No se encontró el registro
+    return retryWithBackoff(async () => {
+      try {
+        const sheets = getClient();
+        const all = await this.getAll();
+        
+        // Encontrar el índice del registro a actualizar
+        const rowIndex = all.findIndex(item => item[idField] === idValue);
+        
+        if (rowIndex === -1) {
+          return null; // No se encontró el registro
+        }
+        
+        // Calcular la fila real en la hoja (índice + 2 porque la fila 1 son los headers)
+        const sheetRowIndex = rowIndex + 2;
+        
+        // Preparar los datos actualizados
+        const updatedData = { ...all[rowIndex], ...data };
+        const values = [this.mapObjectToRow(updatedData)];
+        
+        // Actualizar la fila en la hoja
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${this.sheetName}!A${sheetRowIndex}:${this.getLastColumn()}${sheetRowIndex}`,
+          valueInputOption: 'RAW',
+          resource: { values }
+        });
+        
+        return updatedData;
+      } catch (error) {
+        console.error(`Error actualizando registro en ${this.sheetName}:`, error);
+        throw error;
       }
-      
-      // Calcular la fila real en la hoja (índice + 2 porque la fila 1 son los headers)
-      const sheetRowIndex = rowIndex + 2;
-      
-      // Preparar los datos actualizados
-      const updatedData = { ...all[rowIndex], ...data };
-      const values = [this.mapObjectToRow(updatedData)];
-      
-      // Actualizar la fila en la hoja
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `${this.sheetName}!A${sheetRowIndex}:${this.getLastColumn()}${sheetRowIndex}`,
-        valueInputOption: 'RAW',
-        resource: { values }
-      });
-      
-      return updatedData;
-    } catch (error) {
-      console.error(`Error actualizando registro en ${this.sheetName}:`, error);
-      throw error;
-    }
+    });
   }
 
   /**
