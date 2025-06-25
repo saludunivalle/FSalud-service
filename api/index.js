@@ -1,4 +1,3 @@
-// api/index.js
 const cors = require('cors'); // Import cors
 const errorHandler = require('../middleware/errorHandler');
 
@@ -169,6 +168,11 @@ async function handleApiRequest(req, res) {
     if (path.startsWith('/api/programs/') || path === '/api/programs') {
       const programsHandler = require('./programs');
       return await programsHandler(req, res);
+    }
+
+    if (path.startsWith('/api/admin/')) {
+      const adminHandler = require('./admin');
+      return await adminHandler(req, res);
     }
     // --- End sub-router handlers ---
 

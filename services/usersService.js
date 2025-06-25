@@ -2,6 +2,7 @@
 // *** Importar el repositorio en lugar de sheetsService directamente para crear ***
 const usersRepository = require('../repository/usersRepository'); 
 const sheetsService = require('./sheetsService'); // Aún necesario para findUserByEmail
+const { generateUserId } = require('../utils/idGenerator');
 
 /**
  * Busca un usuario por correo electrónico
@@ -524,5 +525,59 @@ exports.getAllUsers = async () => {
   } catch (error) {
     console.error('Error obteniendo usuarios:', error);
     throw error; 
+  }
+};
+
+/**
+ * Crea un usuario manualmente desde el panel de administración
+ * @param {Object} userData - Datos del usuario
+ * @returns {Promise<Object>} - Usuario creado
+ */
+exports.createUserFromAdmin = async (userData) => {
+  try {
+    // Generar ID único usando el mismo sistema que el registro regular
+    const id_usuario = generateUserId();
+    const {
+      nombre,
+      apellido,
+      tipoDoc,
+      documento,
+      telefono,
+      email,
+      rol,
+      fecha_nac,
+      programa_academico,
+      sede
+    } = userData;
+
+    // Preparar el array para la hoja USUARIOS (mismo formato que createUser)
+    // NOTA: Al ser creado por admin, primer_login = 'si' para evitar FirstLoginForm
+    const newUser = [
+      id_usuario,           // A - id_usuario
+      email,                // B - correo_usuario
+      nombre,               // C - nombre_usuario
+      apellido,             // D - apellido_usuario
+      programa_academico,   // E - programa_academico
+      sede,                 // F - sede
+      documento,            // G - documento_usuario
+      tipoDoc,              // H - tipoDoc
+      telefono,             // I - telefono
+      fecha_nac,            // J - fecha_nac
+      email,                // K - email personal
+      rol,                  // L - rol
+      'si'                  // M - primer_login (marcado como 'si' porque ya fue completado por admin)
+    ];
+
+    console.log('[usersService.createUserFromAdmin] Datos de usuario para crear:', newUser);
+
+    // Usar el mismo repositorio que el registro regular
+    const createdUser = await usersRepository.createUser(newUser);
+    
+    console.log('[usersService.createUserFromAdmin] Usuario creado exitosamente:', createdUser);
+    
+    return createdUser;
+  } catch (error) {
+    console.error('Error en createUserFromAdmin:', error);
+    throw error;
   }
 };

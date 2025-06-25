@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyJWT, isProfesor } = require('../middleware/auth'); // Correct path to your auth middleware
+const usersController = require('../controllers/usersController');
 // const studentController = require('../controllers/studentController'); // Example controller
 
 // All routes defined after this middleware will first verify JWT, then check if user is admin or profesor
@@ -24,5 +25,8 @@ router.post('/update-student-status/:studentId', (req, res) => {
   // Example: studentController.updateStudentStatusByAdmin(req, res);
   res.json({ success: true, message: `Status updated for student ${req.params.studentId} by ${req.user.email}` });
 });
+
+// Crear usuario manualmente desde el panel de administración
+router.post('/create-user', usersController.createUserFromAdmin);
 
 module.exports = router;

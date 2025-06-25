@@ -190,9 +190,69 @@ const getAllUsers = async (req, res) => {
   }
 };
 
+/**
+ * Crea un usuario manualmente desde el panel de administración
+ * @param {Object} req - Objeto de solicitud Express
+ * @param {Object} res - Objeto de respuesta Express
+ */
+const createUserFromAdmin = async (req, res) => {
+  try {
+    const {
+      firstName,
+      lastName,
+      documentType,
+      documentNumber,
+      phone,
+      email,
+      role,
+      birthDate,
+      program,
+      sede
+    } = req.body;
+
+    // Validación básica
+    if (!firstName || !lastName || !documentType || !documentNumber || !phone || !email || !role || !birthDate || !program || !sede) {
+      return res.status(400).json({
+        success: false,
+        error: 'Todos los campos son requeridos'
+      });
+    }
+
+    // Construir el objeto de usuario para el servicio
+    const newUserData = {
+      nombre: firstName,
+      apellido: lastName,
+      tipoDoc: documentType,
+      documento: documentNumber,
+      telefono: phone,
+      email,
+      rol: role,
+      fecha_nac: birthDate,
+      programa_academico: program,
+      sede
+    };
+
+    const createdUser = await usersService.createUserFromAdmin(newUserData);
+
+    res.status(201).json({
+      success: true,
+      message: 'Usuario creado exitosamente',
+      data: createdUser
+    });
+  } catch (error) {
+    console.error('Error al crear usuario desde admin:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al crear usuario',
+      details: error.message
+    });
+  }
+};
+
 module.exports = {
   saveUser,
   getUserById,
   updateFirstLogin,
-  getAllUsers
+  getAllUsers,
+  createUserFromAdmin
 };
