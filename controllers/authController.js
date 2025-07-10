@@ -14,6 +14,9 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const googleAuth = async (req, res) => {
   try {
     console.log('Procesando solicitud de autenticación Google');
+
+    // DEBUG: Imprimir el GOOGLE_CLIENT_ID que el backend está utilizando
+    console.log('GOOGLE_CLIENT_ID en el backend:', process.env.GOOGLE_CLIENT_ID);
     
     const token = req.body.idToken || req.body.token || req.body.credential;
     
