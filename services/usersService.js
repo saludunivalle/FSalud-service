@@ -501,7 +501,7 @@ exports.getAllUsers = async () => {
     const usersResponse = await client.spreadsheets.values.get({
       spreadsheetId: sheetsService.spreadsheetId,
       range: 'USUARIOS!A2:M', 
-    });
+    }); 
 
     const usersRows = usersResponse.data.values || [];
     const users = usersRows.map(row => {
