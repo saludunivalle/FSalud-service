@@ -3,6 +3,7 @@
 const usersRepository = require('../repository/usersRepository'); 
 const sheetsService = require('./sheetsService'); // Aún necesario para findUserByEmail
 const { generateUserId } = require('../utils/idGenerator');
+const { llamadaApiConCola } = require('../utils/apiQueue');
 
 /**
  * Busca un usuario por correo electrónico
@@ -498,10 +499,13 @@ exports.getAllUsers = async () => {
     const client = sheetsService.getClient();
     
     // Obtener usuarios de la hoja USUARIOS únicamente
-    const usersResponse = await client.spreadsheets.values.get({
-      spreadsheetId: sheetsService.spreadsheetId,
-      range: 'USUARIOS!A2:M', 
-    }); 
+    const usersResponse = await llamadaApiConCola(
+      (params) => client.spreadsheets.values.get(params),
+      {
+        spreadsheetId: sheetsService.spreadsheetId,
+        range: 'USUARIOS!A2:M',
+      }
+    );
 
     const usersRows = usersResponse.data.values || [];
     const users = usersRows.map(row => {

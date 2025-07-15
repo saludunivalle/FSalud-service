@@ -2,6 +2,7 @@
 const { google } = require('googleapis');
 const { jwtClient } = require('../config/google');
 require('dotenv').config();
+const { llamadaApiConCola } = require('../utils/apiQueue');
 
 // Obtener el ID de la hoja de cálculo desde variables de entorno
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
@@ -106,10 +107,13 @@ class BaseRepository {
     return retryWithBackoff(async () => {
       try {
         const sheets = getClient();
-        const response = await sheets.spreadsheets.values.get({
-          spreadsheetId,
-          range: this.range,
-        });
+        const response = await llamadaApiConCola(
+          (params) => sheets.spreadsheets.values.get(params),
+          {
+            spreadsheetId,
+            range: this.range,
+          }
+        );
         
         const rows = response.data.values || [];
         return rows.map(row => this.mapRowToObject(row));

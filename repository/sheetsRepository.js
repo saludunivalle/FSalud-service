@@ -1,6 +1,7 @@
 // repository/sheetsRepository.js
 const { google } = require('googleapis');
 require('dotenv').config();
+const { llamadaApiConCola } = require('../utils/apiQueue');
 
 // Configuración para autenticación de servicio
 let auth = null;
@@ -43,10 +44,13 @@ const getSheets = async () => {
 exports.getUsers = async () => {
   try {
     const sheets = await getSheets();
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEETS_ID,
-      range: 'USUARIOS!A2:M',
-    });
+    const response = await llamadaApiConCola(
+      (params) => sheets.spreadsheets.values.get(params),
+      {
+        spreadsheetId: process.env.GOOGLE_SHEETS_ID,
+        range: 'USUARIOS!A2:M',
+      }
+    );
     
     const rows = response.data.values || [];
     return rows.map(row => ({
