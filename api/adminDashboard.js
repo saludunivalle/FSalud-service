@@ -128,11 +128,9 @@ const getAdminDashboardData = async () => {
     const documentTypes = documentosRows.map(row => ({
       id_doc: row[0] || '',
       nombre_doc: row[1] || '',
-      descripcion: row[2] || '',
-      dosis: row[3] || '1',
-      vence: row[4] || 'no',
-      tiempo_vencimiento: row[5] || '0',
-      obligatorio: row[6] || 'si'
+      vence: row[2] || 'no',
+      tiempo_vencimiento: row[3] || '0',
+      dosis: row[4] || '1',
     }));
     
     // Procesar programas académicos

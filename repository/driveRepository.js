@@ -47,14 +47,8 @@ const getEffectiveBaseFolderId = () => {
  */
 const getDriveClient = (userEmail = null) => {
   try {
-    // Si tenemos email de usuario, usar OAuth delegation
-    if (userEmail && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
-      console.log(`🔐 Usando OAuth delegation para: ${userEmail}`);
-      const delegatedClient = getDriveClientWithOAuth(userEmail);
-      if (delegatedClient) {
-        return delegatedClient;
-      }
-    }
+    // SOLUCIÓN TEMPORAL: Usar solo Service Account sin OAuth delegation
+    console.log(`🔧 Usando Service Account directo (solución temporal)`);
     
     // Fallback a Service Account normal
     if (!jwtClient) {

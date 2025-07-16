@@ -215,7 +215,64 @@ exports.getDocumentDoses = async (docId) => {
 exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeType, metadata, numeroDosis = null) => {
   try {
     const isAdminUpload = metadata?.uploadedByAdmin === true;
-    console.log(`Iniciando subida para User: ${userId}, DocType: ${tipoDocId}, File: ${fileName}${isAdminUpload ? ' [CARGADO POR ADMIN]' : ''}`);
+    // Si metadata.fileUrl está presente, guardar la URL directamente
+    if (metadata && metadata.fileUrl) {
+      // Verificar si el tipo de documento existe
+      const tipoDocumento = await documentosRepository.findOneBy('id_doc', tipoDocId);
+      if (!tipoDocumento) {
+        throw new Error(`Tipo de documento con ID ${tipoDocId} no encontrado.`);
+      }
+      // Verificar si el usuario existe
+      const userExists = await usersRepository.findOneBy('id_usuario', userId);
+      if (!userExists) {
+        throw new Error(`Usuario con ID ${userId} no existe en el sistema.`);
+      }
+      // Buscar si ya existe el documento para este usuario y tipo
+      const documentoExistente = await documentosUsuariosRepository.findDocumentoUsuario(userId, tipoDocId, numeroDosis);
+      let documentoInfoDb;
+      if (documentoExistente) {
+        // Actualizar registro existente
+        const updateData = {
+          nombre_doc: tipoDocumento.nombre_doc,
+          dosis: numeroDosis || documentoExistente.dosis || 1,
+          fecha_cargue: new Date().toISOString().split('T')[0],
+          revision: '0',
+          fecha_revision: '',
+          estado: 'Sin revisar',
+          ruta_archivo: metadata.fileUrl,
+          fecha_expedicion: metadata.expeditionDate,
+          fecha_vencimiento: (tipoDocumento.vence === 'si' && metadata.expirationDate) ? metadata.expirationDate : '',
+        };
+        documentoInfoDb = await documentosUsuariosRepository.update(
+          'id_usuarioDoc',
+          documentoExistente.id_usuarioDoc,
+          updateData
+        );
+      } else {
+        // Crear nuevo registro
+        const createData = {
+          id_usuarioDoc: generateUUID(),
+          id_persona: userId,
+          id_doc: tipoDocId,
+          nombre_doc: tipoDocumento.nombre_doc,
+          dosis: numeroDosis || 1,
+          fecha_cargue: new Date().toISOString().split('T')[0],
+          revision: '0',
+          fecha_revision: '',
+          estado: 'Sin revisar',
+          ruta_archivo: metadata.fileUrl,
+          fecha_expedicion: metadata.expeditionDate,
+          fecha_vencimiento: (tipoDocumento.vence === 'si' && metadata.expirationDate) ? metadata.expirationDate : '',
+        };
+        documentoInfoDb = await documentosUsuariosRepository.createDocumentoUsuario(createData);
+      }
+      return {
+        ...documentoInfoDb,
+        nombre_tipoDoc: tipoDocumento.nombre_tipoDoc,
+        vence: tipoDocumento.vence,
+        tiempo_vencimiento: tipoDocumento.tiempo_vencimiento
+      };
+    }
     // Validar tipo de archivo (ya se hace en middleware, pero doble check no hace daño)
     const tiposPermitidos = [
       'application/pdf', 'image/jpeg', 'image/png', 'image/jpg',
@@ -242,23 +299,21 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
         throw new Error(`Usuario con ID ${userId} no existe en el sistema.`);
     }
 
-    // --- Gestión de Carpetas en Drive ---
-    // Obtener email del usuario para OAuth delegation
-    const userEmail = userExists?.correo_usuario;
+    // --- Gestión de Archivos con Servicio Híbrido ---
+    // Usar el servicio híbrido que intenta Google Drive y si falla, usa almacenamiento temporal
+    const fileExtension = fileName.split('.').pop() || 'file';
+    const driveFileName = `${tipoDocumento.nombre_doc}_${userId}_${Date.now()}.${fileExtension}`;
     
-    const carpetaBaseId = await driveRepository.findOrCreateFolder('Documentos_Usuarios', null, userEmail);
-    console.log(`Carpeta base ID: ${carpetaBaseId}`);
-
-    const carpetaUsuarioId = await driveRepository.findOrCreateFolder(userId, carpetaBaseId, userEmail);
-    console.log(`Carpeta de usuario ID: ${carpetaUsuarioId}`);
-    // --- Fin Gestión de Carpetas ---
+    // Construir la URL del archivo según el tipo de almacenamiento
+    const fileUrl = fileInfoDrive.storageType === 'google_drive' 
+      ? (fileInfoDrive.webViewLink || `https://drive.google.com/file/d/${fileInfoDrive.id}/view`)
+      : fileInfoDrive.webViewLink; // Para archivos temporales
+    
+    // --- Fin Gestión de Archivos ---
 
     const documentoExistente = await documentosUsuariosRepository.findDocumentoUsuario(userId, tipoDocId, numeroDosis);
 
     let documentoInfoDb;
-
-    const fileExtension = fileName.split('.').pop() || 'file';
-    const driveFileName = `${tipoDocumento.nombre_doc}_${userId}_${Date.now()}.${fileExtension}`;
 
     if (documentoExistente) {
       console.log(`Documento existente encontrado (ID: ${documentoExistente.id_usuarioDoc}). Actualizando...`);

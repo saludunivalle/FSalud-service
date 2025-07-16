@@ -101,6 +101,48 @@ exports.getDocumentosPendientes = async (req, res) => {
  */
 exports.subirDocumento = async (req, res) => {
   try {
+    // Si viene fileUrl en el body, procesar como URL y no como archivo
+    if (req.body && req.body.fileUrl) {
+      const { userId, documentType, expeditionDate, expirationDate, userName, userEmail, numeroDosis, uploadedByAdmin, fileUrl } = req.body;
+      if (!userId || !documentType || !expeditionDate || !fileUrl) {
+        let missingFields = [];
+        if (!userId) missingFields.push('userId');
+        if (!documentType) missingFields.push('documentType');
+        if (!expeditionDate) missingFields.push('expeditionDate');
+        if (!fileUrl) missingFields.push('fileUrl');
+        return res.status(400).json({
+          success: false,
+          error: `Faltan campos requeridos en la solicitud: ${missingFields.join(', ')}.`
+        });
+      }
+      // Llamar al servicio para guardar la URL
+      const documento = await documentsService.subirDocumento(
+        userId,
+        documentType,
+        null, // fileBuffer
+        null, // fileName
+        null, // mimeType
+        {
+          expeditionDate,
+          expirationDate,
+          userName,
+          userEmail,
+          uploadedByAdmin: uploadedByAdmin === 'true',
+          fileUrl
+        },
+        numeroDosis ? parseInt(numeroDosis) : null
+      );
+      const isAdminUpload = uploadedByAdmin === 'true';
+      return res.status(200).json({
+        success: true,
+        message: isAdminUpload 
+          ? 'Documento cargado exitosamente por administrador.' 
+          : 'Documento subido y registrado correctamente.',
+        data: documento,
+        uploadedByAdmin: isAdminUpload
+      });
+    }
+
     // Usar middleware de Multer para procesar el archivo EN MEMORIA
     // 'file' es el nombre del campo esperado en FormData
     await new Promise((resolve, reject) => {
