@@ -448,8 +448,8 @@ exports.revisarDocumento = async (documentoId, estado, comentario = '') => {
       comentario // Incluir comentario en la actualización
     );
     
-    // Si tenemos información del usuario, enviar notificación por email
-    if (usuario && usuario.correo_usuario) {
+    // Si tenemos información del usuario, enviar notificación por email SOLO si el estado es 'Rechazado' o 'Vencido'
+    if (usuario && usuario.correo_usuario && (estadoBackend === 'Rechazado' || estadoBackend === 'Vencido')) {
       // Ejecutar envío de email de forma asíncrona para no bloquear la respuesta
       setImmediate(async () => {
         try {

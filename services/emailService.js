@@ -151,7 +151,7 @@ class EmailService {
           <div style="background-color: #2C3E50; padding: 20px; text-align: center;">
             <p style="color: #ffffff; font-size: 12px; margin: 0;">
               © ${new Date().getFullYear()} Universidad del Valle - Facultad de Salud<br>
-              Gestor de documentos profesionales en escenarios de práctica
+              Gestor de documentos
             </p>
           </div>
         </div>
