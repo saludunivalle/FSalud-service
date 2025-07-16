@@ -26,7 +26,7 @@ class DriveService {
   }
 
   /**
-   * Sube un archivo a Google Drive
+   * Sube un archivo a Google Drive usando Shared Drive
    * @param {Buffer} fileBuffer - Buffer del archivo
    * @param {string} fileName - Nombre del archivo
    * @param {string} mimeType - Tipo MIME del archivo
@@ -37,8 +37,12 @@ class DriveService {
     try {
       const drive = this.getClient();
       
+      // Usar Shared Drive ID si está configurado, sino usar folder normal
+      const sharedDriveId = process.env.GOOGLE_SHARED_DRIVE_ID;
+      const targetFolderId = sharedDriveId || this.folderId;
+      
       // Crear carpeta para el usuario si no existe
-      const userFolderId = await this.getUserFolder(userId);
+      const userFolderId = await this.getUserFolder(userId, targetFolderId);
       
       // Preparar el buffer como un stream legible
       const bufferStream = new stream.PassThrough();
@@ -56,31 +60,60 @@ class DriveService {
         body: bufferStream,
       };
       
-      // Subir el archivo
-      const response = await drive.files.create({
+      // Subir el archivo con soporte para Shared Drive
+      const createOptions = {
         resource: fileMetadata,
         media: media,
         fields: 'id, name, webViewLink, webContentLink',
-      });
+      };
+      
+      // Si estamos usando Shared Drive, agregar el parámetro
+      if (sharedDriveId) {
+        createOptions.supportsAllDrives = true;
+        createOptions.supportsTeamDrives = true;
+      }
+      
+      const response = await drive.files.create(createOptions);
       
       // Establecer permisos para que sea accesible por enlace
-      await drive.permissions.create({
+      const permissionOptions = {
         fileId: response.data.id,
         requestBody: {
           role: 'reader',
           type: 'anyone',
         },
-      });
+      };
+      
+      // Si estamos usando Shared Drive, agregar los parámetros
+      if (sharedDriveId) {
+        permissionOptions.supportsAllDrives = true;
+        permissionOptions.supportsTeamDrives = true;
+      }
+      
+      await drive.permissions.create(permissionOptions);
       
       // Obtener el link actualizado
-      const file = await drive.files.get({
+      const getOptions = {
         fileId: response.data.id,
         fields: 'id, name, webViewLink, webContentLink',
-      });
+      };
+      
+      if (sharedDriveId) {
+        getOptions.supportsAllDrives = true;
+        getOptions.supportsTeamDrives = true;
+      }
+      
+      const file = await drive.files.get(getOptions);
       
       return file.data;
     } catch (error) {
       console.error('Error al subir archivo a Drive:', error);
+      
+      // Si el error es específico de Service Account, proporcionar información útil
+      if (error.message && error.message.includes('Service Accounts do not have storage quota')) {
+        throw new Error('Error de configuración de Google Drive. Las Service Accounts no tienen cuota de almacenamiento. Se requiere configurar un Shared Drive o usar OAuth delegation.');
+      }
+      
       throw error;
     }
   }
@@ -88,19 +121,31 @@ class DriveService {
   /**
    * Obtiene o crea una carpeta para el usuario
    * @param {string} userId - ID del usuario
+   * @param {string} parentFolderId - ID de la carpeta padre (Shared Drive o normal)
    * @returns {Promise<string>} - ID de la carpeta del usuario
    */
-  async getUserFolder(userId) {
+  async getUserFolder(userId, parentFolderId = this.folderId) {
     try {
       const drive = this.getClient();
       
       // Buscar si ya existe la carpeta del usuario
-      const query = `name = '${userId}' and mimeType = 'application/vnd.google-apps.folder' and '${this.folderId}' in parents`;
-      const response = await drive.files.list({
+      const query = `name = '${userId}' and mimeType = 'application/vnd.google-apps.folder' and '${parentFolderId}' in parents`;
+      const listOptions = {
         q: query,
         fields: 'files(id, name)',
         spaces: 'drive',
-      });
+      };
+      
+      // Si estamos usando Shared Drive, agregar los parámetros
+      const sharedDriveId = process.env.GOOGLE_SHARED_DRIVE_ID;
+      if (sharedDriveId) {
+        listOptions.supportsAllDrives = true;
+        listOptions.supportsTeamDrives = true;
+        listOptions.includeItemsFromAllDrives = true;
+        listOptions.corpora = 'allDrives';
+      }
+      
+      const response = await drive.files.list(listOptions);
       
       // Si existe, devolver el ID
       if (response.data.files.length > 0) {
@@ -111,13 +156,21 @@ class DriveService {
       const fileMetadata = {
         name: userId,
         mimeType: 'application/vnd.google-apps.folder',
-        parents: [this.folderId],
+        parents: [parentFolderId],
       };
       
-      const folder = await drive.files.create({
+      const createOptions = {
         resource: fileMetadata,
         fields: 'id',
-      });
+      };
+      
+      // Si estamos usando Shared Drive, agregar los parámetros
+      if (sharedDriveId) {
+        createOptions.supportsAllDrives = true;
+        createOptions.supportsTeamDrives = true;
+      }
+      
+      const folder = await drive.files.create(createOptions);
       
       return folder.data.id;
     } catch (error) {

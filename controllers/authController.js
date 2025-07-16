@@ -54,6 +54,9 @@ const googleAuth = async (req, res) => {
        });
     }
 
+    console.log('🔑 Generando JWT token...');
+    console.log('🔑 JWT_SECRET configurado:', !!process.env.JWT_SECRET);
+    
     const jwtToken = jwt.sign(
       { 
         id: user.id_usuario, 
@@ -64,6 +67,8 @@ const googleAuth = async (req, res) => {
       process.env.JWT_SECRET || 'secret_key',
       { expiresIn: '24h' }
     );
+    
+    console.log('✅ JWT token generado:', jwtToken.substring(0, 50) + '...');
       
     res.status(200).json({
       success: true,

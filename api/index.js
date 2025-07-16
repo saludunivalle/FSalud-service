@@ -2,7 +2,13 @@ const cors = require('cors'); // Import cors
 const errorHandler = require('../middleware/errorHandler');
 
 // --- CORS Configuration ---
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '').split(',');
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://documentosfsalud.vercel.app',
+  ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',').filter(origin => origin.trim())
+];
+
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -11,6 +17,8 @@ const corsOptions = {
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log(`CORS blocked origin: ${origin}`);
+      console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -174,7 +182,28 @@ async function handleApiRequest(req, res) {
       const adminHandler = require('./admin');
       return await adminHandler(req, res);
     }
-    // --- End sub-router handlers ---
+
+    // --- Nuevos endpoints consolidados v1 ---
+    if (path.startsWith('/api/v1/user-profile/')) {
+      const userProfileHandler = require('./userProfile');
+      return await userProfileHandler(req, res);
+    }
+    
+    if (path === '/api/v1/admin-dashboard') {
+      const adminDashboardHandler = require('./adminDashboard');
+      return await adminDashboardHandler(req, res);
+    }
+
+    if (path.startsWith('/api/v1/document-review/')) {
+      const documentReviewHandler = require('./documentReview');
+      return await documentReviewHandler(req, res);
+    }
+
+    if (path === '/api/v1/documents/batch-update') {
+      const documentsBatchUpdateHandler = require('./documentsBatchUpdate');
+      return await documentsBatchUpdateHandler(req, res);
+    }
+    // --- End nuevos endpoints consolidados v1 ---
 
     // Ruta no encontrada
     console.log(`Route not found: ${path}`);

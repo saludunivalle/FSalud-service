@@ -5,6 +5,7 @@ const cors = require('cors');
 // Lista de orígenes permitidos
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost:3001',
   'https://documentosfsalud.vercel.app' // URL del frontend en producción
 ];
 

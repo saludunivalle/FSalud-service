@@ -80,7 +80,11 @@ module.exports = async (req, res) => {
     if (req.method === 'POST') {
       // Subir documento (POST /api/documents/subir)
       if (endpoint === 'subir') {
-        return await documentosController.subirDocumento(req, res);
+        // Aplicar middleware de autenticación JWT
+        const { verifyJWT } = require('../middleware/auth');
+        return await verifyJWT(req, res, async () => {
+          return await documentosController.subirDocumento(req, res);
+        });
       }
       
       // Actualizar estados de documentos vencidos (POST /api/documents/actualizar-vencidos)

@@ -11,6 +11,8 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
  */
 const verifyJWT = async (req, res, next) => {
   try {
+    console.log('🔍 Verificando JWT token...');
+    
     // Extraer token del header o query
     const authHeader = req.headers.authorization;
     const queryToken = req.query.token;
@@ -19,26 +21,34 @@ const verifyJWT = async (req, res, next) => {
     
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.split(' ')[1];
+      console.log('📝 Token extraído del header Authorization');
     } else if (queryToken) {
       token = queryToken;
+      console.log('📝 Token extraído del query parameter');
     }
     
     if (!token) {
+      console.log('❌ No se encontró token');
       return res.status(401).json({ error: 'Token no proporcionado' });
     }
+    
+    console.log('🔑 JWT_SECRET configurado:', !!process.env.JWT_SECRET);
     
     // Verificar token JWT
     jwt.verify(token, process.env.JWT_SECRET || 'secret_key', (err, decoded) => {
       if (err) {
+        console.log('❌ Error verificando JWT:', err.message);
         return res.status(401).json({ error: 'Token inválido o expirado' });
       }
+      
+      console.log('✅ JWT verificado correctamente, usuario:', decoded);
       
       // Añadir información del usuario a la solicitud
       req.user = decoded;
       next();
     });
   } catch (error) {
-    console.error('Error de autenticación JWT:', error);
+    console.error('❌ Error de autenticación JWT:', error);
     return res.status(401).json({ error: 'Error de autenticación' });
   }
 };

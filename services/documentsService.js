@@ -243,10 +243,13 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
     }
 
     // --- Gestión de Carpetas en Drive ---
-    const carpetaBaseId = await driveRepository.findOrCreateFolder('Documentos_Usuarios');
+    // Obtener email del usuario para OAuth delegation
+    const userEmail = userExists?.correo_usuario;
+    
+    const carpetaBaseId = await driveRepository.findOrCreateFolder('Documentos_Usuarios', null, userEmail);
     console.log(`Carpeta base ID: ${carpetaBaseId}`);
 
-    const carpetaUsuarioId = await driveRepository.findOrCreateFolder(userId, carpetaBaseId);
+    const carpetaUsuarioId = await driveRepository.findOrCreateFolder(userId, carpetaBaseId, userEmail);
     console.log(`Carpeta de usuario ID: ${carpetaUsuarioId}`);
     // --- Fin Gestión de Carpetas ---
 
@@ -280,7 +283,8 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
         fileBuffer,
         driveFileName,
         mimeType,
-        carpetaUsuarioId
+        carpetaUsuarioId,
+        userEmail
       );
       console.log("Nuevo archivo subido a Drive:", fileInfoDrive);
 
@@ -309,7 +313,8 @@ exports.subirDocumento = async (userId, tipoDocId, fileBuffer, fileName, mimeTyp
         fileBuffer,
         driveFileName,
         mimeType,
-        carpetaUsuarioId
+        carpetaUsuarioId,
+        userEmail
       );
       console.log("Archivo subido a Drive:", fileInfoDrive);
 

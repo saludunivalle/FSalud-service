@@ -71,7 +71,32 @@ if (jwtClient) {
   });
 }
 
+// Función para obtener cliente de Drive con OAuth delegation
+const getDriveClientWithOAuth = (userEmail) => {
+  if (!userEmail) {
+    console.error('No se proporcionó email de usuario para OAuth delegation');
+    return null;
+  }
+
+  try {
+    // Crear cliente JWT con delegation
+    const delegatedJWT = new google.auth.JWT(
+      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      null,
+      process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      SCOPES,
+      userEmail // Delegar a este usuario
+    );
+
+    return google.drive({ version: 'v3', auth: delegatedJWT });
+  } catch (error) {
+    console.error('Error al crear cliente de Drive con OAuth delegation:', error);
+    return null;
+  }
+};
+
 module.exports = {
   oAuth2Client,
-  jwtClient
+  jwtClient,
+  getDriveClientWithOAuth
 };
